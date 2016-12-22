@@ -10,7 +10,7 @@ import string
 import tagme
 import unicodecsv as csv
 import sqlite3
-
+import pyfscache
 
 Paper = namedtuple('Paper', ['author_id', 'name', 'institution', 'year', 'abstract', 'doi'])
 
@@ -29,42 +29,20 @@ def legit_abstract(abstract):
     return abstract is not None and len(abstract) > 10
 
 
-class Annotations(object):
+def entities(text):
+    return  [(a.entity_title, a.score) for a in tagme.annotate(text).annotations]
 
-    def __init__(self, db_file, gcube_token):
-        self.db = pickledb.load(db_file, False)
-        self.gcube_token = gcube_token
-        self.inserted = 0
+def set_cache(cache_dir):
+    cache = pyfscache.FSCache(cache_dir)
+    expertfinding.entities = cache(expertfinding.entities)
 
-    def entities(self, text, min_score=DEFAULT_MIN_SCORE):
-        res = self._query_db(text, min_score)
-        if res is not None:
-            return res
-        entities = [(a.entity_title, a.score) for a in tagme.annotate(text, self.gcube_token).annotations]
-        self.db.set(text, entities)
-        self.inserted += 1
-        if self.inserted % FLUSH_EVERY == 0:
-            logging.info("Flushing DB...")
-            self.db.dump()
-        return self._query_db(text, min_score)
-
-    def _query_db(self, text, min_score):
-        res = self.db.get(text)
-        if res is not None:
-            return [(title, score) for title, score in res if score >= min_score]
-        return None
-    
-    def flush(self):
-        if (self.inserted):
-            self.db.dump()
 
 class ExpertFinding(object):
     
-    def __init__(self, annotations_db, storage_db, erase=True):
+    def __init__(self, storage_db, erase=True):
         self.papers_count = Counter()
         self.abstract_count = Counter()
         self.id_to_entities = dict()
-        self.annotations = annotations_db
         if erase and os.path.isfile(storage_db):
             os.remove(storage_db)
         self.db_connection = sqlite3.connect(storage_db)
@@ -101,8 +79,8 @@ class ExpertFinding(object):
             self._add_author(p.author_id, p.name, p.institution)
             self.papers_count[p.author_id] += 1
             if (legit_abstract(p.abstract)):
-                entities = self.annotations.entities(p.abstract)
-                self._add_entities(p.author_id, p.year, entities)
+                ent = entities(p.abstract)
+                self._add_entities(p.author_id, p.year, ent)
                 self.abstract_count[p.author_id] += 1
         self.db_connection.commit()
 

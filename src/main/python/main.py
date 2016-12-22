@@ -18,7 +18,9 @@ from argparse import ArgumentParser
 import logging
 import numpy
 import sys
-from expertfinding import Annotations, ExpertFinding
+from expertfinding import ExpertFinding
+import expertfinding
+import pyfscache
 
 MIN_YEAR, MAX_YEAR = 2006, 2017
 
@@ -26,13 +28,14 @@ def main():
     '''Command line options.'''
     parser = ArgumentParser()
     parser.add_argument("-i", "--input", required=True, action="store", nargs="*", help="Input file")
-    parser.add_argument("-a", "--annotations_db", required=True, action="store", help="Annotations DB file")
+    parser.add_argument("-c", "--cache_dir", required=True, action="store", help="Cache directory")
     parser.add_argument("-s", "--storage_db", required=True, action="store", help="Storage DB file")
     parser.add_argument("-g", "--gcube_token", required=True, action="store", help="Tagme authentication gcube token")
     args = parser.parse_args()
     
-    annotations = Annotations(args.annotations_db, args.gcube_token)
-    ef = ExpertFinding(annotations, args.storage_db)
+    expertfinding.set_cache(args.cache_dir)
+
+    ef = ExpertFinding(args.storage_db)
 
     for input_f in args.input:
         ef.read_papers(input_f, MIN_YEAR, MAX_YEAR)
@@ -42,7 +45,6 @@ def main():
     a_id = ef.author_id("Paolo Ferragina")[0]
     print a_id, ef.name(a_id), ef.institution(a_id)
     print ef.entities(a_id)
-    annotations.flush()
     return 0
 
 
