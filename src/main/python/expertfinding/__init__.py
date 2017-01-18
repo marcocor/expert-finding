@@ -180,10 +180,11 @@ class ExpertFinding(object):
             GROUP BY author_id''').fetchall()
 
     def print_abstract_quantiles(self):
-        papers_count = [p[1] for p in self.papers_count()]
-        print "number of abstracts: {}".format(sum(papers_count))
+        papers_count = zip(*self.papers_count())[1]
+        print "number of papers: {}".format(sum(papers_count))
+        print "number of authors: {}".format(len(papers_count))
         quantiles = stats.mstats.mquantiles(papers_count, prob=[n / 10.0 for n in range(10)])
-        print quantiles
+        print "quantiles:", quantiles
         for i in range(len(quantiles)):
             begin = int(quantiles[i])
             end = int(quantiles[i + 1]) - 1 if i < len(quantiles) - 1 else max(papers_count)
