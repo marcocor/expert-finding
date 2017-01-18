@@ -1,6 +1,7 @@
 
 from collections import namedtuple, Counter
 from scipy import stats
+from math import log
 import expertfinding
 import logging
 import os
@@ -30,7 +31,8 @@ def legit_abstract(abstract):
 
 
 def entities(text):
-    return  [(a.entity_title, a.score) for a in tagme.annotate(text).annotations]
+    return [(a.entity_title, a.score) for a in tagme.annotate(text).annotations]
+
 
 def set_cache(cache_dir):
     cache = pyfscache.FSCache(cache_dir)
@@ -38,7 +40,7 @@ def set_cache(cache_dir):
 
 
 class ExpertFinding(object):
-    
+
     def __init__(self, storage_db, erase=True):
         self.papers_count = Counter()
         self.abstract_count = Counter()
@@ -51,10 +53,9 @@ class ExpertFinding(object):
              (author_id PRIMARY KEY, name, institution)
              ''')
         self.db.execute('''CREATE TABLE IF NOT EXISTS entities
-             (entity, author_id, year, rho,
+             (entity, author_id, paper_id, year, rho,
              FOREIGN KEY(author_id) REFERENCES authors(author_id))''')
 
-    
     def _papers_generator(self, filename, encoding):
         with open(filename, 'rb') as input_f:
             for i, l in enumerate(csv.reader(input_f, delimiter=';', encoding=encoding)):
@@ -62,35 +63,89 @@ class ExpertFinding(object):
                     logging.debug("Discarding line %d %d %s" % (i, len(l), l))
                     continue
                 yield Paper(l[0], normalize_author(l[2], l[1]), l[4], int(l[6]), l[13], l[11])
-                
+
     def read_papers(self, input_f, min_year=None, max_year=None, encoding=INPUT_ENCODING):
         papers = list(self._papers_generator(input_f, encoding))
         logging.info("%s: Number of papers (total): %d" % (os.path.basename(input_f), len(papers)))
-        
+
         papers = [p for p in papers if
                   (min_year is None or p.year >= min_year) and (max_year is None or p.year <= max_year)]
 
         logging.info("%s: Number of papers (filtered) %d" % (os.path.basename(input_f), len(papers)))
         if papers:
-            logging.info("%s: Papers with abstract %.1f%%" % (os.path.basename(input_f), sum(1 for p in papers if legit_abstract(p.abstract)) * 100 / len(papers)))
-            logging.info("%s: Papers with DOI but no abstract %.1f%%" % (os.path.basename(input_f), sum(1 for p in papers if not legit_abstract(p.abstract) and p.doi) * 100 / len(papers)))
+            logging.info("%s: Number of papers (filtered) with abstract: %d" % (os.path.basename(input_f), sum(1 for p in papers if legit_abstract(p.abstract))))
+            logging.info("%s: Number of papers (filtered) with DOI but no abstract %d" % (os.path.basename(input_f), sum(1 for p in papers if not legit_abstract(p.abstract) and p.doi)))
 
+        paper_id = self.next_paper_id()
         for p in papers:
             self._add_author(p.author_id, p.name, p.institution)
             self.papers_count[p.author_id] += 1
             if (legit_abstract(p.abstract)):
                 ent = entities(p.abstract)
-                self._add_entities(p.author_id, p.year, ent)
+                self._add_entities(p.author_id, paper_id, p.year, ent)
                 self.abstract_count[p.author_id] += 1
+                paper_id += 1
         self.db_connection.commit()
+
+    def author_entity_frequency(self, author_id, popularity_by_institution=None):
+        """
+        Returns how many authors's papers have cited the entities cited by a specific author.
+        """
+        return self.db.execute('''
+            SELECT entity, author_id, entity_popularity, COUNT(*) as entity_author_frequency, MAX(max_rho), GROUP_CONCAT(year) as years
+            FROM (
+                SELECT i.entity, e.author_id, entity_popularity, MAX(rho) AS max_rho, e.year
+                FROM (
+                    SELECT entity, COUNT(*) as entity_popularity
+                    FROM (
+                        SELECT entity, institution
+                        FROM entities as e, authors as a
+                        WHERE e.author_id == a.author_id AND a.institution==?
+                        GROUP BY paper_id, entity
+                    )
+                    GROUP BY entity
+                ) AS i, entities AS e
+                WHERE i.entity == e.entity AND e.author_id == ?
+                GROUP BY e.entity, e.paper_id
+                ORDER BY e.year
+            )
+            GROUP BY entity
+            ORDER BY entity_author_frequency DESC''', (popularity_by_institution, author_id,)).fetchall()
+
+    def get_authors_count(self, institution):
+        """
+        Returns how many authors are part of an institution.
+        """
+        return self.db.execute('''SELECT COUNT(*) FROM authors WHERE institution==?''', (institution,)).fetchall()[0][0]
+
+    def ef_iaf(self, author_id):
+        institution = self.institution(author_id)
+        institution_papers = self.institution_papers_count(institution)
+        author_entity_frequency = self.author_entity_frequency(author_id, institution)
+        author_papers = self.author_papers_count(author_id)
+        return sorted(((
+                 entity,
+                 entity_author_freq / float(author_papers),
+                 log(institution_papers/float(entity_popularity)),
+                 entity_author_freq / float(author_papers) * log(institution_papers/float(entity_popularity)),
+                 max_rho,
+                 [int(y) for y in years.split(",")],
+                ) for entity, author_id, entity_popularity, entity_author_freq, max_rho, years in author_entity_frequency), key=lambda t: t[3], reverse=True)
+
+    def author_papers_count(self, author_id):
+        return self.db.execute('''SELECT COUNT(DISTINCT(paper_id)) FROM entities WHERE author_id=?''', (author_id,)).fetchall()[0][0]
+
+    def institution_papers_count(self, institution):
+        return self.db.execute('''
+            SELECT COUNT(DISTINCT(e.paper_id))
+            FROM "entities" as e, authors as a
+            WHERE e.author_id == a.author_id AND a.institution=?''', (institution,)).fetchall()[0][0]
 
     def author_id(self, author_name):
         return [r[0] for r in self.db.execute('''SELECT author_id FROM authors WHERE name=?''', (author_name,)).fetchall()]
 
-
     def institution(self, author_id):
         return self.db.execute('''SELECT institution FROM authors WHERE author_id=?''', (author_id,)).fetchall()[0][0]
-
 
     def name(self, author_id):
         return self.db.execute('''SELECT name FROM authors WHERE author_id=?''', (author_id,)).fetchall()[0][0]
@@ -102,26 +157,24 @@ class ExpertFinding(object):
         if min_freq is not None:
             contraints.append('COUNT(*)>=%d' % min_freq)
         having = "HAVING {}".format(" AND ".join(contraints)) if contraints else ""
-        
         return self.db.execute('''SELECT entity, year, AVG(rho), MIN(rho), MAX(rho), GROUP_CONCAT(rho), COUNT(*)
            FROM entities
            WHERE author_id=?
            GROUP BY entity, year
-           ORDER BY year, COUNT(*) DESC
-           {}'''.format(having), author_id).fetchall()
-
+           {}
+           ORDER BY year, COUNT(*) DESC'''.format(having), author_id).fetchall()
 
     def entities(self, author_id):
         return self.db.execute('''SELECT year, entity, rho FROM entities WHERE author_id=?''', (author_id,)).fetchall()
 
+    def _add_entities(self, author_id, paper_id, year, entities):
+        self.db.executemany('INSERT INTO entities VALUES (?,?,?,?,?)', ((entity, author_id, paper_id, year, rho) for entity, rho in entities))
 
-    def _add_entities(self, author_id, year, entities):
-        self.db.executemany('INSERT INTO entities VALUES (?,?,?,?)', ((entity, author_id, year, rho) for entity, rho in entities))
-
+    def next_paper_id(self):
+        return self.db.execute('SELECT IFNULL(MAX(paper_id), -1) FROM entities').fetchall()[0][0] + 1
 
     def _add_author(self, author_id, name, institution):
         self.db.execute('INSERT OR IGNORE INTO authors VALUES (?,?,?)', (author_id, name, institution))
-
 
     def print_abstract_quantiles(self):
         print "number of abstracts: {}".format(sum(self.abstract_count.values()))
@@ -132,7 +185,6 @@ class ExpertFinding(object):
             end = int(quantiles[i + 1]) - 1 if i < len(quantiles) - 1 else max(self.abstract_count.values())
             print "{} authors have {}-{} papers with abstract".format(sum(1 for a_id in self.abstract_count if begin <= self.abstract_count[a_id] <= end), begin, end)
 
-
     def print_entity_stats(self):
         all_entities = Counter(e for entities in self.id_to_entities.values() for e in entities)
         print "most common entities"
@@ -141,14 +193,10 @@ class ExpertFinding(object):
         print "number of entities: {}".format(sum(all_entities.values()))
         print "number of distinct entities: {}".format(len(all_entities))
 
-
     def print_authors_stats(self):
         for name, a_id in self.name_to_id.iteritems():
-            print "{} (ID {}) papers: {} abstracts:{}".format(name, a_id, self.papers_count[a_id], self.abstract_count[a_id]) 
-
+            print "{} (ID {}) papers: {} abstracts:{}".format(name, a_id, self.papers_count[a_id], self.abstract_count[a_id])
 
     def print_author_stats(self, author_name):
         for title, freq in Counter(self.id_to_entities[self.name_to_id[author_name]]).most_common():
             print title, freq
-    
-    
