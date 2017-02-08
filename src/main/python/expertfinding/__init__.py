@@ -1,29 +1,18 @@
 
-from collections import namedtuple, Counter
-from scipy import stats
 from math import log
 import expertfinding
 import logging
 import os
-import pickledb
 import re
 import string
 import tagme
-import unicodecsv as csv
 import sqlite3
 import pyfscache
 
-Paper = namedtuple('Paper', ['author_id', 'name', 'institution', 'year', 'abstract', 'doi'])
-
 __all__ = []
 
-INPUT_ENCODING = "windows-1252"
 DEFAULT_MIN_SCORE = 0.15
 FLUSH_EVERY = 100
-
-
-def normalize_author(name_field, lastname_field):
-    return re.sub(r"\W+", " ", string.capwords("{} {}".format(name_field, lastname_field)).strip())
 
 
 def legit_abstract(abstract):
@@ -53,16 +42,8 @@ class ExpertFinding(object):
              (entity, author_id, paper_id, year, rho,
              FOREIGN KEY(author_id) REFERENCES authors(author_id))''')
 
-    def _papers_generator(self, filename, encoding):
-        with open(filename, 'rb') as input_f:
-            for i, l in enumerate(csv.reader(input_f, delimiter=';', encoding=encoding)):
-                if len(l) != 20:
-                    logging.debug("Discarding line %d %d %s" % (i, len(l), l))
-                    continue
-                yield Paper(l[0], normalize_author(l[2], l[1]), l[4], int(l[6]), l[13], l[11])
-
-    def read_papers(self, input_f, min_year=None, max_year=None, encoding=INPUT_ENCODING):
-        papers = list(self._papers_generator(input_f, encoding))
+    def read_papers(self, input_f, papers_generator, min_year=None, max_year=None):
+        papers = list(papers_generator)
         logging.info("%s: Number of papers (total): %d" % (os.path.basename(input_f), len(papers)))
 
         papers = [p for p in papers if
@@ -76,11 +57,9 @@ class ExpertFinding(object):
         paper_id = self._next_paper_id()
         for p in papers:
             self._add_author(p.author_id, p.name, p.institution)
-            self.papers_count[p.author_id] += 1
             if (legit_abstract(p.abstract)):
                 ent = entities(p.abstract)
                 self._add_entities(p.author_id, paper_id, p.year, ent)
-                self.abstract_count[p.author_id] += 1
                 paper_id += 1
         self.db_connection.commit()
 
