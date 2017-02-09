@@ -9,10 +9,11 @@ import subprocess
 import os
 import time
 
-OUTDIR = "data/tu-translated-text/"
+OUTDIR = "data/tu-translated/tu-translated-text/"
 DOC_FILES = "data/tu-expert-collection/data/xml-dump/*/*.xml"
 TOPIC_NL="data/tu-expert-collection/topics/topics_nl.csv"
-TOPIC_TRANS_OUT="data/tu-translated-queries.csv"
+TOPIC_TRANS_OUT="data/tu-translated/tu-translated-queries.csv"
+
 
 def nice_string(s):
     if len(s) > 83:
