@@ -48,7 +48,7 @@ def main():
     ef = ExpertFinding(args.storage_db)
 
     for input_f in glob(args.input):
-        ef.read_papers(input_f, datasetreader.paper_generator(input_f, args.input_format), MIN_YEAR, MAX_YEAR)
+        ef.add_documents(input_f, datasetreader.paper_generator(input_f, args.input_format), MIN_YEAR, MAX_YEAR)
 
     return 0
 

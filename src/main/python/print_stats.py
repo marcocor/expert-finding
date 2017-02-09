@@ -18,7 +18,7 @@ def main():
     args = parser.parse_args()
 
     exf = ExpertFinding(args.storage_db, False)
-    exf.print_abstract_quantiles()
+    exf.print_documents_quantiles()
     return 0
 
 

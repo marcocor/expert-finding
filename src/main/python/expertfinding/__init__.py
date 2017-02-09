@@ -1,5 +1,6 @@
 
 from math import log
+from scipy import stats
 import expertfinding
 import logging
 import os
@@ -15,8 +16,8 @@ DEFAULT_MIN_SCORE = 0.15
 FLUSH_EVERY = 100
 
 
-def legit_abstract(abstract):
-    return abstract is not None and len(abstract) > 10
+def legit_document(doc_body):
+    return doc_body is not None and len(doc_body) > 10
 
 
 def entities(text):
@@ -42,7 +43,7 @@ class ExpertFinding(object):
              (entity, author_id, paper_id, year, rho,
              FOREIGN KEY(author_id) REFERENCES authors(author_id))''')
 
-    def read_papers(self, input_f, papers_generator, min_year=None, max_year=None):
+    def add_documents(self, input_f, papers_generator, min_year=None, max_year=None):
         papers = list(papers_generator)
         logging.info("%s: Number of papers (total): %d" % (os.path.basename(input_f), len(papers)))
 
@@ -51,13 +52,13 @@ class ExpertFinding(object):
 
         logging.info("%s: Number of papers (filtered) %d" % (os.path.basename(input_f), len(papers)))
         if papers:
-            logging.info("%s: Number of papers (filtered) with abstract: %d" % (os.path.basename(input_f), sum(1 for p in papers if legit_abstract(p.abstract))))
-            logging.info("%s: Number of papers (filtered) with DOI but no abstract %d" % (os.path.basename(input_f), sum(1 for p in papers if not legit_abstract(p.abstract) and p.doi)))
+            logging.info("%s: Number of papers (filtered) with abstract: %d" % (os.path.basename(input_f), sum(1 for p in papers if legit_document(p.abstract))))
+            logging.info("%s: Number of papers (filtered) with DOI but no abstract %d" % (os.path.basename(input_f), sum(1 for p in papers if not legit_document(p.abstract) and p.doi)))
 
         paper_id = self._next_paper_id()
         for p in papers:
             self._add_author(p.author_id, p.name, p.institution)
-            if (legit_abstract(p.abstract)):
+            if (legit_document(p.abstract)):
                 ent = entities(p.abstract)
                 self._add_entities(p.author_id, paper_id, p.year, ent)
                 paper_id += 1
@@ -158,13 +159,13 @@ class ExpertFinding(object):
             FROM "entities"
             GROUP BY author_id''').fetchall()
 
-    def print_abstract_quantiles(self):
+    def print_documents_quantiles(self):
         papers_count = zip(*self.papers_count())[1]
-        print "number of papers: {}".format(sum(papers_count))
+        print "number of documents: {}".format(sum(papers_count))
         print "number of authors: {}".format(len(papers_count))
         quantiles = stats.mstats.mquantiles(papers_count, prob=[n / 10.0 for n in range(10)])
         print "quantiles:", quantiles
         for i in range(len(quantiles)):
             begin = int(quantiles[i])
             end = int(quantiles[i + 1]) - 1 if i < len(quantiles) - 1 else max(papers_count)
-            print "{} authors have {}-{} papers with abstract".format(sum(1 for c in papers_count if begin <= c <= end), begin, end)
+            print "{} authors have {}-{} documents with abstract".format(sum(1 for c in papers_count if begin <= c <= end), begin, end)
