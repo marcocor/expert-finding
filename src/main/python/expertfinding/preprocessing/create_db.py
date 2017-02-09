@@ -15,16 +15,18 @@ It defines classes_and_methods
 from __future__ import division
 
 from argparse import ArgumentParser
+from glob import glob
 import logging
 import numpy
 import pyfscache
 import sys
+import tagme
 
 from expertfinding import ExpertFinding
 import expertfinding
 from expertfinding.preprocessing import datasetreader
 import unicodecsv as csv
-from glob import glob
+
 
 MIN_YEAR, MAX_YEAR = 2006, 2017
 
@@ -38,6 +40,8 @@ def main():
     parser.add_argument("-s", "--storage_db", required=True, action="store", help="Storage DB file")
     parser.add_argument("-g", "--gcube_token", required=True, action="store", help="Tagme authentication gcube token")
     args = parser.parse_args()
+    
+    tagme.GCUBE_TOKEN = args.gcube_token
 
     expertfinding.set_cache(args.cache_dir)
 
@@ -53,5 +57,5 @@ def main():
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.DEBUG)
     sys.exit(main())
