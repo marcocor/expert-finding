@@ -50,9 +50,6 @@ def main():
     for input_f in glob(args.input):
         ef.read_papers(input_f, datasetreader.paper_generator(input_f, args.input_format), MIN_YEAR, MAX_YEAR)
 
-    a_id = ef.author_id("Paolo Ferragina")[0]
-    print a_id, ef.name(a_id), ef.institution(a_id)
-    print ef.entities(a_id)
     return 0
 
 
