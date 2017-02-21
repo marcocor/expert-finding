@@ -3,7 +3,6 @@ import glob
 from lxml import etree
 from langdetect import detect
 import re
-import itertools
 from collections import Counter
 import subprocess
 import os
