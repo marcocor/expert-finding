@@ -1,4 +1,4 @@
-
+from collections import Counter
 from math import log
 from scipy import stats
 import expertfinding
@@ -9,6 +9,9 @@ import string
 import tagme
 import sqlite3
 import pyfscache
+import math
+import time
+from astroid.__pkginfo__ import author
 
 __all__ = []
 
@@ -33,7 +36,7 @@ def _annotated_text_generator(text, annotations):
     prev = 0
     for a in sorted(annotations, key=lambda a: a.begin):
         yield text[prev:a.begin]
-        yield u"<ann entity='{}'>{}</ann>".format(a.entity_title, text[a.begin: a.end])
+        yield u"<ann entity='{}' score='{}'>{}</ann>".format(a.entity_title, a.score, text[a.begin: a.end])
         prev = a.end
     yield text[prev:]
 
@@ -55,6 +58,8 @@ class ExpertFindingBuilder(object):
         self.ef.db.execute('''CREATE TABLE IF NOT EXISTS documents
              (author_id, document_id, year, body,
              FOREIGN KEY(author_id) REFERENCES authors(author_id))''')
+        self.ef.db.execute('''CREATE INDEX IF NOT EXISTS entities_author_id_index ON entities (author_id)''')
+        self.ef.db.execute('''CREATE INDEX IF NOT EXISTS authors_institution_index ON authors (institution)''')
 
     def add_documents(self, input_f, papers_generator, min_year=None, max_year=None):
         papers = list(papers_generator)
@@ -199,3 +204,30 @@ class ExpertFinding(object):
             begin = int(quantiles[i])
             end = int(quantiles[i + 1]) - 1 if i < len(quantiles) - 1 else max(papers_count)
             print "{} authors have {}-{} documents with abstract".format(sum(1 for c in papers_count if begin <= c <= end), begin, end)
+
+    def citing_authors(self, entities):
+        """
+        Returns the list of authors citing any of the entities passed by arguments.
+        """
+        result = self.db.execute('''SELECT DISTINCT(author_id)
+            FROM "entities"
+            WHERE entity IN ({})'''.format(", ".join('"{}"'.format(t) for t in entities))).fetchall()
+        return [t[0] for t in result]
+
+    def find_expert(self, query):
+        start_time = time.time()
+        query_entities =  set(a.entity_title for a in entities(query))
+        logging.debug("Found the following entities in the query: {}".format(",".join(query_entities)))
+        authors = self.citing_authors(query_entities) 
+        logging.debug("Found %d authors that matched the query, computing ef_iaf and cosine similarity for each of them." % len(authors))
+        results = []
+        for author_id in authors:
+            entity_to_efiaf = dict((t[0], t[1:]) for t in self.ef_iaf(author_id))
+            author_entity_to_efiaf = dict((e, entity_to_efiaf[e][2]) for e in entity_to_efiaf)
+            query_entity_to_efiaf = dict((e, 1.0/len(query_entities) * entity_to_efiaf[e][1]) for e in query_entities)
+            score = sum(author_entity_to_efiaf[e] * query_entity_to_efiaf[e] for e in set(author_entity_to_efiaf.keys()) & set(query_entity_to_efiaf.keys())) / (math.sqrt(sum(author_entity_to_efiaf.values())) * math.sqrt(sum(query_entity_to_efiaf.values())))
+            name = self.name(author_id)
+            results.append((name, author_id, score))
+            print "{} score={}".format(name, score)
+        logging.info("Query completed in %.3f sec" % (time.time() - start_time,))
+        return sorted(results, key=lambda t: t[2], reverse=True)
