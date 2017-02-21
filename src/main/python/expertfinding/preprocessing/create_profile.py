@@ -7,7 +7,6 @@ from argparse import ArgumentParser
 import logging
 import sys
 from expertfinding import ExpertFinding
-import expertfinding
 from collections import Counter
 
 
