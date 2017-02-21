@@ -21,12 +21,25 @@ def legit_document(doc_body):
 
 
 def entities(text):
-    return [(a.entity_title, a.score) for a in tagme.annotate(text).annotations]
+    return tagme.annotate(text).annotations
 
 
 def set_cache(cache_dir):
     cache = pyfscache.FSCache(cache_dir)
     expertfinding.entities = cache(expertfinding.entities)
+
+
+def _annotated_text_generator(text, annotations):
+    prev = 0
+    for a in sorted(annotations, key=lambda a: a.begin):
+        yield text[prev:a.begin]
+        yield u"<ann entity='{}'>{}</ann>".format(a.entity_title, text[a.begin: a.end])
+        prev = a.end
+    yield text[prev:]
+
+
+def annotated_text(text, annotations):
+    return "".join(_annotated_text_generator(text, annotations))
 
 
 class ExpertFinding(object):
@@ -40,7 +53,10 @@ class ExpertFinding(object):
              (author_id PRIMARY KEY, name, institution)
              ''')
         self.db.execute('''CREATE TABLE IF NOT EXISTS entities
-             (entity, author_id, paper_id, year, rho,
+             (entity, author_id, document_id, year, rho,
+             FOREIGN KEY(author_id) REFERENCES authors(author_id))''')
+        self.db.execute('''CREATE TABLE IF NOT EXISTS documents
+             (author_id, document_id, year, body,
              FOREIGN KEY(author_id) REFERENCES authors(author_id))''')
 
     def add_documents(self, input_f, papers_generator, min_year=None, max_year=None):
@@ -55,13 +71,14 @@ class ExpertFinding(object):
             logging.info("%s: Number of papers (filtered) with abstract: %d" % (os.path.basename(input_f), sum(1 for p in papers if legit_document(p.abstract))))
             logging.info("%s: Number of papers (filtered) with DOI but no abstract %d" % (os.path.basename(input_f), sum(1 for p in papers if not legit_document(p.abstract) and p.doi)))
 
-        paper_id = self._next_paper_id()
+        document_id = self._next_paper_id()
         for p in papers:
             self._add_author(p.author_id, p.name, p.institution)
             if (legit_document(p.abstract)):
                 ent = entities(p.abstract)
-                self._add_entities(p.author_id, paper_id, p.year, ent)
-                paper_id += 1
+                self._add_entities(p.author_id, document_id, p.year, ent)
+                self._add_document_body(p.author_id, document_id, p.year, p.abstract, ent)
+                document_id += 1
         self.db_connection.commit()
 
     def author_entity_frequency(self, author_id, popularity_by_institution=None):
@@ -78,12 +95,12 @@ class ExpertFinding(object):
                         SELECT entity, institution
                         FROM entities as e, authors as a
                         WHERE e.author_id == a.author_id AND a.institution==?
-                        GROUP BY paper_id, entity
+                        GROUP BY document_id, entity
                     )
                     GROUP BY entity
                 ) AS i, entities AS e
                 WHERE i.entity == e.entity AND e.author_id == ?
-                GROUP BY e.entity, e.paper_id
+                GROUP BY e.entity, e.document_id
                 ORDER BY e.year
             )
             GROUP BY entity
@@ -110,11 +127,11 @@ class ExpertFinding(object):
                 ) for entity, author_id, entity_popularity, entity_author_freq, max_rho, years in author_entity_frequency), key=lambda t: t[3], reverse=True)
 
     def author_papers_count(self, author_id):
-        return self.db.execute('''SELECT COUNT(DISTINCT(paper_id)) FROM entities WHERE author_id=?''', (author_id,)).fetchall()[0][0]
+        return self.db.execute('''SELECT COUNT(DISTINCT(document_id)) FROM entities WHERE author_id=?''', (author_id,)).fetchall()[0][0]
 
     def institution_papers_count(self, institution):
         return self.db.execute('''
-            SELECT COUNT(DISTINCT(e.paper_id))
+            SELECT COUNT(DISTINCT(e.document_id))
             FROM "entities" as e, authors as a
             WHERE e.author_id == a.author_id AND a.institution=?''', (institution,)).fetchall()[0][0]
 
@@ -144,18 +161,22 @@ class ExpertFinding(object):
     def entities(self, author_id):
         return self.db.execute('''SELECT year, entity, rho FROM entities WHERE author_id=?''', (author_id,)).fetchall()
 
-    def _add_entities(self, author_id, paper_id, year, entities):
-        self.db.executemany('INSERT INTO entities VALUES (?,?,?,?,?)', ((entity, author_id, paper_id, year, rho) for entity, rho in entities))
+    def _add_entities(self, author_id, document_id, year, annotations):
+        self.db.executemany('INSERT INTO entities VALUES (?,?,?,?,?)', ((a.entity_title, author_id, document_id, year, a.score) for a in annotations))
+
+    def _add_document_body(self, author_id, document_id, year, body, annotations):
+        annotated_t = annotated_text(body, annotations)
+        self.db.execute('INSERT INTO documents VALUES (?,?,?,?)', (author_id, document_id, year, annotated_t))
 
     def _next_paper_id(self):
-        return self.db.execute('SELECT IFNULL(MAX(paper_id), -1) FROM entities').fetchall()[0][0] + 1
+        return self.db.execute('SELECT IFNULL(MAX(document_id), -1) FROM entities').fetchall()[0][0] + 1
 
     def _add_author(self, author_id, name, institution):
         self.db.execute('INSERT OR IGNORE INTO authors VALUES (?,?,?)', (author_id, name, institution))
 
     def papers_count(self):
         return self.db.execute('''
-            SELECT author_id, COUNT(DISTINCT(paper_id))
+            SELECT author_id, COUNT(DISTINCT(document_id))
             FROM "entities"
             GROUP BY author_id''').fetchall()
 
