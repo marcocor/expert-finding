@@ -17,15 +17,12 @@ from __future__ import division
 from argparse import ArgumentParser
 from glob import glob
 import logging
-import numpy
-import pyfscache
 import sys
 import tagme
 
 from expertfinding import ExpertFinding
 import expertfinding
 from expertfinding.preprocessing import datasetreader
-import unicodecsv as csv
 
 
 MIN_YEAR, MAX_YEAR = 2006, 2017
@@ -46,9 +43,10 @@ def main():
     expertfinding.set_cache(args.cache_dir)
 
     ef = ExpertFinding(args.storage_db)
+    ef_builder = ef.builder()
 
     for input_f in glob(args.input):
-        ef.add_documents(input_f, datasetreader.paper_generator(input_f, args.input_format), MIN_YEAR, MAX_YEAR)
+        ef_builder.add_documents(input_f, datasetreader.paper_generator(input_f, args.input_format), MIN_YEAR, MAX_YEAR)
 
     return 0
 

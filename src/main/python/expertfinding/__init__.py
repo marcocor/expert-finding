@@ -42,20 +42,17 @@ def annotated_text(text, annotations):
     return "".join(_annotated_text_generator(text, annotations))
 
 
-class ExpertFinding(object):
+class ExpertFindingBuilder(object):
 
-    def __init__(self, storage_db, erase=True):
-        if erase and os.path.isfile(storage_db):
-            os.remove(storage_db)
-        self.db_connection = sqlite3.connect(storage_db)
-        self.db = self.db_connection.cursor()
-        self.db.execute('''CREATE TABLE IF NOT EXISTS authors
+    def __init__(self, ef):
+        self.ef = ef
+        self.ef.db.execute('''CREATE TABLE IF NOT EXISTS authors
              (author_id PRIMARY KEY, name, institution)
              ''')
-        self.db.execute('''CREATE TABLE IF NOT EXISTS entities
+        self.ef.db.execute('''CREATE TABLE IF NOT EXISTS entities
              (entity, author_id, document_id, year, rho,
              FOREIGN KEY(author_id) REFERENCES authors(author_id))''')
-        self.db.execute('''CREATE TABLE IF NOT EXISTS documents
+        self.ef.db.execute('''CREATE TABLE IF NOT EXISTS documents
              (author_id, document_id, year, body,
              FOREIGN KEY(author_id) REFERENCES authors(author_id))''')
 
@@ -79,7 +76,35 @@ class ExpertFinding(object):
                 self._add_entities(p.author_id, document_id, p.year, ent)
                 self._add_document_body(p.author_id, document_id, p.year, p.abstract, ent)
                 document_id += 1
-        self.db_connection.commit()
+        self.ef.db_connection.commit()
+
+    def entities(self, author_id):
+        return self.ef.db.execute('''SELECT year, entity, rho FROM entities WHERE author_id=?''', (author_id,)).fetchall()
+
+    def _add_entities(self, author_id, document_id, year, annotations):
+        self.ef.db.executemany('INSERT INTO entities VALUES (?,?,?,?,?)', ((a.entity_title, author_id, document_id, year, a.score) for a in annotations))
+
+    def _add_document_body(self, author_id, document_id, year, body, annotations):
+        annotated_t = annotated_text(body, annotations)
+        self.ef.db.execute('INSERT INTO documents VALUES (?,?,?,?)', (author_id, document_id, year, annotated_t))
+
+    def _next_paper_id(self):
+        return self.ef.db.execute('SELECT IFNULL(MAX(document_id), -1) FROM entities').fetchall()[0][0] + 1
+
+    def _add_author(self, author_id, name, institution):
+        self.ef.db.execute('INSERT OR IGNORE INTO authors VALUES (?,?,?)', (author_id, name, institution))
+
+
+class ExpertFinding(object):
+
+    def __init__(self, storage_db, erase=True):
+        if erase and os.path.isfile(storage_db):
+            os.remove(storage_db)
+        self.db_connection = sqlite3.connect(storage_db)
+        self.db = self.db_connection.cursor()
+
+    def builder(self):
+        return ExpertFindingBuilder(self)
 
     def author_entity_frequency(self, author_id, popularity_by_institution=None):
         """
@@ -157,22 +182,6 @@ class ExpertFinding(object):
            GROUP BY entity, year
            {}
            ORDER BY year, COUNT(*) DESC'''.format(having), author_id).fetchall()
-
-    def entities(self, author_id):
-        return self.db.execute('''SELECT year, entity, rho FROM entities WHERE author_id=?''', (author_id,)).fetchall()
-
-    def _add_entities(self, author_id, document_id, year, annotations):
-        self.db.executemany('INSERT INTO entities VALUES (?,?,?,?,?)', ((a.entity_title, author_id, document_id, year, a.score) for a in annotations))
-
-    def _add_document_body(self, author_id, document_id, year, body, annotations):
-        annotated_t = annotated_text(body, annotations)
-        self.db.execute('INSERT INTO documents VALUES (?,?,?,?)', (author_id, document_id, year, annotated_t))
-
-    def _next_paper_id(self):
-        return self.db.execute('SELECT IFNULL(MAX(document_id), -1) FROM entities').fetchall()[0][0] + 1
-
-    def _add_author(self, author_id, name, institution):
-        self.db.execute('INSERT OR IGNORE INTO authors VALUES (?,?,?)', (author_id, name, institution))
 
     def papers_count(self):
         return self.db.execute('''
