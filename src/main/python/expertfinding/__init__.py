@@ -154,7 +154,6 @@ class ExpertFinding(object):
                 GROUP BY entity
             ) as d_e
             WHERE d_e.entity == e.entity GROUP BY e.entity
-            ORDER BY entity_popularity DESC
             ''', (author_id, DEFAULT_MIN_SCORE)).fetchall()
 
     def entity_popularity(self, entities):
@@ -248,18 +247,17 @@ class ExpertFinding(object):
         return [t[0] for t in result]
 
     def cossim_efiaf_score(self, query_entities, author_id):
-        
-        entity_to_efiaf = dict((t[0], t[1:]) for t in self.ef_iaf(author_id))
-        author_entity_to_efiaf = dict((e, entity_to_efiaf[e][2]) for e in entity_to_efiaf)
+        author_entity_to_efiaf = dict((e[0], e[3]) for e in self.ef_iaf(author_id))
         query_entity_popularity = dict(self.entity_popularity(query_entities))
-        common_entities = set(author_entity_to_efiaf.keys()) & set(query_entities)
-        query_entity_to_efiaf = dict((e, 1.0/len(query_entities) * query_entity_popularity[e]) for e in query_entities)
+        total_papers = self.total_papers()
+        query_entity_to_efiaf = dict((e, 1.0/len(query_entities) * log(total_papers/float(query_entity_popularity[e]))) for e in query_entities)
         
-        return sum(author_entity_to_efiaf[e] * query_entity_to_efiaf[e] for e in common_entities) \
+        return sum(author_entity_to_efiaf[e] * query_entity_to_efiaf[e] for e in set(author_entity_to_efiaf.keys()) & set(query_entity_to_efiaf.keys())) \
             / (math.sqrt(sum(author_entity_to_efiaf.values())) * math.sqrt(sum(query_entity_to_efiaf.values())))
             
     def efiaf_score(self, query_entities, author_id):
-        author_entity_to_ef = dict((t[0], t[1]) for t in self.author_entity_frequency(author_id))
+        author_papers = self.author_papers_count(author_id)
+        author_entity_to_ef = dict((t[0], t[1]/float(author_papers)) for t in self.author_entity_frequency(author_id))
         entity_popularity = dict((t[0], t[1]) for t in self.entity_popularity(query_entities))
         return sum(author_entity_to_ef[e] * entity_popularity[e] for e in set(query_entities) & set(author_entity_to_ef.keys()))
             
