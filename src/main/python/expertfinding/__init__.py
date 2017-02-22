@@ -259,8 +259,9 @@ class ExpertFinding(object):
             / (math.sqrt(sum(author_entity_to_efiaf.values())) * math.sqrt(sum(query_entity_to_efiaf.values())))
             
     def efiaf_score(self, query_entities, author_id):
-        author_entity_to_efiaf = dict((t[0], t[1:]) for t in self.ef_iaf(author_id))
-        return sum(author_entity_to_efiaf[e][0] * author_entity_to_efiaf[e][1] for e in set(query_entities) & set(author_entity_to_efiaf.keys()))
+        author_entity_to_ef = dict((t[0], t[1]) for t in self.author_entity_frequency(author_id))
+        entity_popularity = dict((t[0], t[1]) for t in self.entity_popularity(query_entities))
+        return sum(author_entity_to_ef[e] * entity_popularity[e] for e in set(query_entities) & set(author_entity_to_ef.keys()))
             
     def find_expert(self, query, scoring):
         start_time = time.time()
