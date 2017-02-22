@@ -15,7 +15,7 @@ from astroid.__pkginfo__ import author
 
 __all__ = []
 
-DEFAULT_MIN_SCORE = 0.15
+DEFAULT_MIN_SCORE = 0.20
 FLUSH_EVERY = 100
 
 
@@ -129,12 +129,12 @@ class ExpertFinding(object):
                     )
                     GROUP BY entity
                 ) AS i, entities AS e
-                WHERE i.entity == e.entity AND e.author_id == ?
+                WHERE i.entity == e.entity AND e.author_id == ? AND e.rho > ?
                 GROUP BY e.entity, e.document_id
                 ORDER BY e.year
             )
             GROUP BY entity
-            ORDER BY entity_author_frequency DESC''', (popularity_by_institution, author_id,)).fetchall()
+            ORDER BY entity_author_frequency DESC''', (popularity_by_institution, author_id, DEFAULT_MIN_SCORE)).fetchall()
 
     def get_authors_count(self, institution):
         """
@@ -209,17 +209,17 @@ class ExpertFinding(object):
         """
         Returns the list of authors citing any of the entities passed by arguments.
         """
-        result = self.db.execute('''SELECT DISTINCT(author_id)
+        result = self.db.execute(u'''SELECT DISTINCT(author_id)
             FROM "entities"
-            WHERE entity IN ({})'''.format(", ".join('"{}"'.format(t) for t in entities))).fetchall()
+            WHERE entity IN ({}) AND rho > ?'''.format(u", ".join(u'"{}"'.format(t) for t in entities)), (DEFAULT_MIN_SCORE,)).fetchall()
         return [t[0] for t in result]
 
     def find_expert(self, query):
         start_time = time.time()
         query_entities =  set(a.entity_title for a in entities(query))
-        logging.debug("Found the following entities in the query: {}".format(",".join(query_entities)))
+        logging.debug(u"Found the following entities in the query: {}".format(u",".join(query_entities)))
         authors = self.citing_authors(query_entities) 
-        logging.debug("Found %d authors that matched the query, computing ef_iaf and cosine similarity for each of them." % len(authors))
+        logging.debug(u"Found %d authors that matched the query, computing ef_iaf and cosine similarity for each of them." % len(authors))
         results = []
         for author_id in authors:
             entity_to_efiaf = dict((t[0], t[1:]) for t in self.ef_iaf(author_id))
