@@ -8,17 +8,23 @@ from argparse import ArgumentParser
 from flask import Flask, jsonify, request
 import sys
 import tagme
-
+import logging
 from expertfinding import ExpertFinding
+import os
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder=os.path.join("..", "..", "..", "resources", "web"), static_path="/static")
 
 @app.route('/query')
 def find_expert():
     global exf
     query = request.args.get('q')
-    res = exf.find_expert(query)
-    return jsonify(experts = res)
+    res_efiaf, time_efiaf = exf.find_expert(query, ExpertFinding.efiaf_score)
+    res_cosim_efiaf, time_cosim_efiaf = exf.find_expert(query, ExpertFinding.cossim_efiaf_score)
+    return jsonify(experts_efiaf = res_efiaf,
+                   time_efiaf = time_efiaf,
+                   experts_cossim_efiaf = res_cosim_efiaf,
+                   time_cossim_efiaf = time_cosim_efiaf,
+                   )
 
 def main():
     global exf
@@ -35,4 +41,7 @@ def main():
     
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.DEBUG)
+    app.logger.addHandler(logging.StreamHandler())
+    app.logger.setLevel(logging.DEBUG)
     sys.exit(main())
