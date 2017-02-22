@@ -24,7 +24,7 @@ def legit_document(doc_body):
 
 
 def entities(text):
-    return tagme.annotate(text).annotations
+    return tagme.annotate(text).annotations if text else []
 
 
 def set_cache(cache_dir):
@@ -45,6 +45,10 @@ def annotated_text(text, annotations):
     return "".join(_annotated_text_generator(text, annotations))
 
 
+def join_entities_sql(entities):
+    return u", ".join(u"'{}'".format(t) for t in entities)
+
+
 class ExpertFindingBuilder(object):
 
     def __init__(self, ef):
@@ -52,14 +56,19 @@ class ExpertFindingBuilder(object):
         self.ef.db.execute('''CREATE TABLE IF NOT EXISTS authors
              (author_id PRIMARY KEY, name, institution)
              ''')
-        self.ef.db.execute('''CREATE TABLE IF NOT EXISTS entities
+        self.ef.db.execute('''CREATE TABLE IF NOT EXISTS entity_occurrences
              (entity, author_id, document_id, year, rho,
              FOREIGN KEY(author_id) REFERENCES authors(author_id))''')
         self.ef.db.execute('''CREATE TABLE IF NOT EXISTS documents
              (author_id, document_id, year, body,
              FOREIGN KEY(author_id) REFERENCES authors(author_id))''')
-        self.ef.db.execute('''CREATE INDEX IF NOT EXISTS entities_author_id_index ON entities (author_id)''')
-        self.ef.db.execute('''CREATE INDEX IF NOT EXISTS authors_institution_index ON authors (institution)''')
+        self.ef.db.execute('''CREATE TABLE IF NOT EXISTS institutions
+             (institution PRIMARY KEY, document_count)''')
+        self.ef.db.execute('''CREATE TABLE IF NOT EXISTS entities
+             (entity, institution, frequency, PRIMARY KEY (entity, institution))''')
+        self.ef.db.execute('''CREATE INDEX IF NOT EXISTS entities_author_id_index ON entity_occurrences (author_id)''')
+        self.ef.db.execute('''CREATE INDEX IF NOT EXISTS entities_entity_index ON entities (entity)''')
+        self.ef.db.execute('''CREATE INDEX IF NOT EXISTS entity_occurrences_entity_index ON entity_occurrences (entity)''')
 
     def add_documents(self, input_f, papers_generator, min_year=None, max_year=None):
         papers = list(papers_generator)
@@ -78,23 +87,32 @@ class ExpertFindingBuilder(object):
             self._add_author(p.author_id, p.name, p.institution)
             if (legit_document(p.abstract)):
                 ent = entities(p.abstract)
-                self._add_entities(p.author_id, document_id, p.year, ent)
+                self._add_entities(p.author_id, document_id, p.year, p.institution, ent)
                 self._add_document_body(p.author_id, document_id, p.year, p.abstract, ent)
                 document_id += 1
         self.ef.db_connection.commit()
 
     def entities(self, author_id):
-        return self.ef.db.execute('''SELECT year, entity, rho FROM entities WHERE author_id=?''', (author_id,)).fetchall()
+        return self.ef.db.execute('''SELECT year, entity, rho FROM entity_occurrences WHERE author_id=?''', (author_id,)).fetchall()
 
-    def _add_entities(self, author_id, document_id, year, annotations):
-        self.ef.db.executemany('INSERT INTO entities VALUES (?,?,?,?,?)', ((a.entity_title, author_id, document_id, year, a.score) for a in annotations))
+    def _add_entities(self, author_id, document_id, year, institution, annotations):
+        self.ef.db.executemany('INSERT INTO entity_occurrences VALUES (?,?,?,?,?)', ((a.entity_title, author_id, document_id, year, a.score) for a in annotations))
+        unique_entities = set(a.entity_title for a in annotations)
+        self.ef.db.executemany('''INSERT OR IGNORE INTO entities VALUES (?,?,0)''', ((e, institution) for e in unique_entities))
+        self.ef.db.executemany('''UPDATE entities
+                                  SET frequency = frequency + 1
+                                  WHERE entity=? AND institution=?''', ((e, institution) for e in unique_entities))
+        self.ef.db.execute('''INSERT OR IGNORE INTO institutions VALUES (?,0)''', (institution,))
+        self.ef.db.execute('''UPDATE institutions
+                              SET document_count = document_count + 1
+                              WHERE institution=?''', (institution,))
 
     def _add_document_body(self, author_id, document_id, year, body, annotations):
         annotated_t = annotated_text(body, annotations)
         self.ef.db.execute('INSERT INTO documents VALUES (?,?,?,?)', (author_id, document_id, year, annotated_t))
 
     def _next_paper_id(self):
-        return self.ef.db.execute('SELECT IFNULL(MAX(document_id), -1) FROM entities').fetchall()[0][0] + 1
+        return self.ef.db.execute('SELECT IFNULL(MAX(document_id), -1) FROM entity_occurrences').fetchall()[0][0] + 1
 
     def _add_author(self, author_id, name, institution):
         self.ef.db.execute('INSERT OR IGNORE INTO authors VALUES (?,?,?)', (author_id, name, institution))
@@ -111,30 +129,43 @@ class ExpertFinding(object):
     def builder(self):
         return ExpertFindingBuilder(self)
 
-    def author_entity_frequency(self, author_id, popularity_by_institution=None):
+    def author_entity_frequency(self, author_id):
         """
         Returns how many authors's papers have cited the entities cited by a specific author.
         """
         return self.db.execute('''
-            SELECT entity, author_id, entity_popularity, COUNT(*) as entity_author_frequency, MAX(max_rho), GROUP_CONCAT(year) as years
-            FROM (
-                SELECT i.entity, e.author_id, entity_popularity, MAX(rho) AS max_rho, e.year
-                FROM (
-                    SELECT entity, COUNT(*) as entity_popularity
-                    FROM (
-                        SELECT entity, institution
-                        FROM entities as e, authors as a
-                        WHERE e.author_id == a.author_id AND a.institution==?
-                        GROUP BY document_id, entity
-                    )
-                    GROUP BY entity
-                ) AS i, entities AS e
-                WHERE i.entity == e.entity AND e.author_id == ? AND e.rho > ?
-                GROUP BY e.entity, e.document_id
-                ORDER BY e.year
-            )
+            SELECT entity, COUNT(DISTINCT(document_id)) as author_freq, GROUP_CONCAT(year) as years, MAX(rho) AS max_rho
+            FROM entity_occurrences
+            WHERE author_id == ? AND rho > ?
             GROUP BY entity
-            ORDER BY entity_author_frequency DESC''', (popularity_by_institution, author_id, DEFAULT_MIN_SCORE)).fetchall()
+            ''', (author_id, DEFAULT_MIN_SCORE)).fetchall()
+
+    def author_entity_frequency_and_popularity(self, author_id):
+        """
+        Returns how many authors's papers have cited the entities cited by a specific author.
+        """
+        return self.db.execute('''
+            SELECT e.entity, author_freq, SUM(e.frequency) AS entity_popularity,  years, max_rho
+            FROM entities AS e,
+            (
+                SELECT entity, COUNT(DISTINCT(document_id)) as author_freq, GROUP_CONCAT(year) as years, MAX(rho) AS max_rho
+                FROM entity_occurrences
+                WHERE author_id == ? AND rho > ?
+                GROUP BY entity
+            ) as d_e
+            WHERE d_e.entity == e.entity GROUP BY e.entity
+            ORDER BY entity_popularity DESC
+            ''', (author_id, DEFAULT_MIN_SCORE)).fetchall()
+
+    def entity_popularity(self, entities):
+        """
+        """
+        return self.db.execute(u'''
+            SELECT entity, SUM(frequency) AS entity_popularity
+            FROM entities
+            WHERE entity IN ({})
+            GROUP BY entity
+            '''.format(join_entities_sql(entities))).fetchall()
 
     def get_authors_count(self, institution):
         """
@@ -142,28 +173,30 @@ class ExpertFinding(object):
         """
         return self.db.execute('''SELECT COUNT(*) FROM authors WHERE institution==?''', (institution,)).fetchall()[0][0]
 
+    def total_papers(self):
+        return self.db.execute('''SELECT COUNT(*) FROM documents''').fetchall()[0][0]
+            
     def ef_iaf(self, author_id):
-        institution = self.institution(author_id)
-        institution_papers = self.institution_papers_count(institution)
-        author_entity_frequency = self.author_entity_frequency(author_id, institution)
+        total_papers = self.total_papers()
+        author_entity_frequency = self.author_entity_frequency_and_popularity(author_id)
         author_papers = self.author_papers_count(author_id)
         return sorted(((
                  entity,
                  entity_author_freq / float(author_papers),
-                 log(institution_papers/float(entity_popularity)),
-                 entity_author_freq / float(author_papers) * log(institution_papers/float(entity_popularity)),
+                 log(total_papers/float(entity_popularity)),
+                 entity_author_freq / float(author_papers) * log(total_papers/float(entity_popularity)),
                  max_rho,
                  [int(y) for y in years.split(",")],
-                ) for entity, author_id, entity_popularity, entity_author_freq, max_rho, years in author_entity_frequency), key=lambda t: t[3], reverse=True)
+                ) for entity, entity_author_freq, entity_popularity,  years, max_rho in author_entity_frequency), key=lambda t: t[3], reverse=True)
 
     def author_papers_count(self, author_id):
-        return self.db.execute('''SELECT COUNT(DISTINCT(document_id)) FROM entities WHERE author_id=?''', (author_id,)).fetchall()[0][0]
+        return self.db.execute('''SELECT COUNT(DISTINCT(document_id)) FROM entity_occurrences WHERE author_id=?''', (author_id,)).fetchall()[0][0]
 
     def institution_papers_count(self, institution):
         return self.db.execute('''
-            SELECT COUNT(DISTINCT(e.document_id))
-            FROM "entities" as e, authors as a
-            WHERE e.author_id == a.author_id AND a.institution=?''', (institution,)).fetchall()[0][0]
+            SELECT document_count
+            FROM "institutions"
+            WHERE institution=?''', (institution,)).fetchall()[0][0]
 
     def author_id(self, author_name):
         return [r[0] for r in self.db.execute('''SELECT author_id FROM authors WHERE name=?''', (author_name,)).fetchall()]
@@ -182,7 +215,7 @@ class ExpertFinding(object):
             contraints.append('COUNT(*)>=%d' % min_freq)
         having = "HAVING {}".format(" AND ".join(contraints)) if contraints else ""
         return self.db.execute('''SELECT entity, year, AVG(rho), MIN(rho), MAX(rho), GROUP_CONCAT(rho), COUNT(*)
-           FROM entities
+           FROM entity_occurrences
            WHERE author_id=?
            GROUP BY entity, year
            {}
@@ -191,7 +224,7 @@ class ExpertFinding(object):
     def papers_count(self):
         return self.db.execute('''
             SELECT author_id, COUNT(DISTINCT(document_id))
-            FROM "entities"
+            FROM "entity_occurrences"
             GROUP BY author_id''').fetchall()
 
     def print_documents_quantiles(self):
@@ -210,24 +243,37 @@ class ExpertFinding(object):
         Returns the list of authors citing any of the entities passed by arguments.
         """
         result = self.db.execute(u'''SELECT DISTINCT(author_id)
-            FROM "entities"
-            WHERE entity IN ({}) AND rho > ?'''.format(u", ".join(u'"{}"'.format(t) for t in entities)), (DEFAULT_MIN_SCORE,)).fetchall()
+            FROM "entity_occurrences"
+            WHERE entity IN ({}) AND rho > ?'''.format(join_entities_sql(entities)), (DEFAULT_MIN_SCORE,)).fetchall()
         return [t[0] for t in result]
 
-    def find_expert(self, query):
+    def cossim_efiaf_score(self, query_entities, author_id):
+        
+        entity_to_efiaf = dict((t[0], t[1:]) for t in self.ef_iaf(author_id))
+        author_entity_to_efiaf = dict((e, entity_to_efiaf[e][2]) for e in entity_to_efiaf)
+        query_entity_popularity = dict(self.entity_popularity(query_entities))
+        common_entities = set(author_entity_to_efiaf.keys()) & set(query_entities)
+        query_entity_to_efiaf = dict((e, 1.0/len(query_entities) * query_entity_popularity[e]) for e in query_entities)
+        
+        return sum(author_entity_to_efiaf[e] * query_entity_to_efiaf[e] for e in common_entities) \
+            / (math.sqrt(sum(author_entity_to_efiaf.values())) * math.sqrt(sum(query_entity_to_efiaf.values())))
+            
+    def efiaf_score(self, query_entities, author_id):
+        author_entity_to_efiaf = dict((t[0], t[1:]) for t in self.ef_iaf(author_id))
+        return sum(author_entity_to_efiaf[e][0] * author_entity_to_efiaf[e][1] for e in set(query_entities) & set(author_entity_to_efiaf.keys()))
+            
+    def find_expert(self, query, scoring):
         start_time = time.time()
         query_entities =  set(a.entity_title for a in entities(query))
         logging.debug(u"Found the following entities in the query: {}".format(u",".join(query_entities)))
         authors = self.citing_authors(query_entities) 
-        logging.debug(u"Found %d authors that matched the query, computing ef_iaf and cosine similarity for each of them." % len(authors))
+        logging.debug(u"Found %d authors that matched the query, computing score for each of them." % len(authors))
         results = []
         for author_id in authors:
-            entity_to_efiaf = dict((t[0], t[1:]) for t in self.ef_iaf(author_id))
-            author_entity_to_efiaf = dict((e, entity_to_efiaf[e][2]) for e in entity_to_efiaf)
-            query_entity_to_efiaf = dict((e, 1.0/len(query_entities) * entity_to_efiaf[e][1]) for e in query_entities)
-            score = sum(author_entity_to_efiaf[e] * query_entity_to_efiaf[e] for e in set(author_entity_to_efiaf.keys()) & set(query_entity_to_efiaf.keys())) / (math.sqrt(sum(author_entity_to_efiaf.values())) * math.sqrt(sum(query_entity_to_efiaf.values())))
+            score = scoring(self, query_entities, author_id)
             name = self.name(author_id)
-            results.append((name, author_id, score))
-            print "{} score={}".format(name, score)
-        logging.info("Query completed in %.3f sec" % (time.time() - start_time,))
-        return sorted(results, key=lambda t: t[2], reverse=True)
+            results.append({"name":name, "author_id":author_id, "score":score})
+            logging.debug(u"%s score=%.3f", name, score)
+        runtime = time.time() - start_time
+        logging.info("Query completed in %.3f sec" % (runtime,))
+        return sorted(results, key=lambda t: t["score"], reverse=True), runtime
