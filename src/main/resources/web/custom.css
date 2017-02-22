@@ -1,0 +1,36 @@
+body {
+  padding-top: 50px;
+}
+.main {
+  padding: 40px 15px;
+  text-align: center;
+}
+
+.form-search {
+￼    max-width: 330px;
+￼    padding: 15px;
+￼    margin: 0 auto;
+}
+
+#search-button {
+	margin: 15px;
+}
+
+#results {
+    display: none;
+}
+
+#loader {
+    border: 6px solid #f3f3f3;
+    border-top: 6px solid #3498db;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    animation: spin 1.5s linear infinite;
+    display: none;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
