@@ -50,11 +50,11 @@
        	</div>
 	    <form class="form-search">
        		<div class="row">
-	        	<div class="form-group col-xs-offset-2 col-xs-8">
+	        	<div class="form-group col-md-offset-2 col-md-8">
 	        		<label for="query-input" class="sr-only">Search an expert</label>
-	        		<input type="text" id="query-input" class="form-control" placeholder="Search an expert" required="" autofocus="">
+	        		<input type="text" id="query-input" class="form-control" placeholder="Search an expert" required="" autofocus=""/>
 	        	</div>
-	        	<div class="col-xs-1">
+	        	<div class="col-md-1">
 	        		<div id="loader"></div>
 	        	</div>
 		      </div>
@@ -64,14 +64,25 @@
      	</form>
 	   </div>
       <div id="results">
+      	<div class="row">
+	      <div class="col-md-offset-1 col-md-10">
+	      	<h3>Query entities</h3>
+			<div id="query-entities">
+			</div>
+		  </div>
+      	</div>
        	<div class="row">
-	      <div class="col-xs-offset-1 col-xs-5">
-	      	<h2> Cosine sim - ef*iaf</h2>
+	      <div class="col-md-offset-1 col-md-5">
+       		<div class="row">
+	      		<div class="col-md-8"> <h3>Cosine sim - ef*iaf</h3></div><div class="col-md-4 text-right time" id="time-left"></div>
+	      	</div>
 	        <ul class="list-group" id="results-list-left">
 	        </ul>
 	      </div>
-	      <div class="col-xs-5">
-	      	<h2> Pure ef*iaf</h2>
+	      <div class="col-md-5">
+       		<div class="row">
+	      		<div class="col-md-8"> <h3>Pure ef*iaf</h3></div><div class="col-md-4 text-right time" id="time-right"></div>
+	      	</div>
 	        <ul class="list-group" id="results-list-right">
 	        </ul>
 	      </div>

@@ -18,6 +18,9 @@ function issueQuery() {
 			$('#results').show();
 			fillResults($("#results-list-right"), data["experts_efiaf"]);
 			fillResults($("#results-list-left"), data["experts_cossim_efiaf"]);
+			$("#time-right").text(data["time_efiaf"].toFixed(3) + " sec")
+			$("#time-left").text(data["time_cossim_efiaf"].toFixed(3) + " sec")
+			fillQueryEntities($("#query-entities"), data["query_entities"])
 		}
 	)
 	.fail(
@@ -49,4 +52,17 @@ function fillResults(li, results) {
 				)
 				.append($("<span>").addClass('badge').text(r["score"].toFixed(3))));
 	});
+}
+
+function fillQueryEntities(div, query_entities){
+	div.empty();
+
+	if (query_entities.length == 0)
+		div.append($('<div>')
+				.addClass("alert").addClass("alert-warning").attr("role", "alert").text("No entities found in query."))
+		
+	$.each(query_entities, function(i, e) {
+			div.append($('<span>').addClass("label").addClass("label-default").text(e));
+		} 
+	);
 }

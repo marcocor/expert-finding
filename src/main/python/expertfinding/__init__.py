@@ -275,4 +275,4 @@ class ExpertFinding(object):
             logging.debug(u"%s score=%.3f", name, score)
         runtime = time.time() - start_time
         logging.info("Query completed in %.3f sec" % (runtime,))
-        return sorted(results, key=lambda t: t["score"], reverse=True), runtime
+        return sorted(results, key=lambda t: t["score"], reverse=True), runtime, query_entities

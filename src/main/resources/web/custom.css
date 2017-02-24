@@ -2,7 +2,7 @@ body {
   padding-top: 50px;
 }
 .main {
-  padding: 40px 15px;
+  padding: 30px 15px 10px 15px;
   text-align: center;
 }
 
@@ -33,4 +33,9 @@ body {
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
+}
+
+.time {
+    margin-top: 28px;
+    color: gray;
 }
