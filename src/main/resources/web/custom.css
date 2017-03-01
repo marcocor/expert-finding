@@ -39,3 +39,7 @@ body {
     margin-top: 28px;
     color: gray;
 }
+
+.highlight-annotation {
+	background-color: lime;
+}
