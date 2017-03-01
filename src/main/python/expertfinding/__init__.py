@@ -36,7 +36,7 @@ def _annotated_text_generator(text, annotations):
     prev = 0
     for a in sorted(annotations, key=lambda a: a.begin):
         yield text[prev:a.begin]
-        yield u"<ann entity='{}' score='{}'>{}</ann>".format(a.entity_title, a.score, text[a.begin: a.end])
+        yield u"<span class='annotation' entity='{}' score='{}'>{}</span>".format(a.entity_title, a.score, text[a.begin: a.end])
         prev = a.end
     yield text[prev:]
 
@@ -199,6 +199,16 @@ class ExpertFinding(object):
 
     def author_id(self, author_name):
         return [r[0] for r in self.db.execute('''SELECT author_id FROM authors WHERE name=?''', (author_name,)).fetchall()]
+
+    def document(self, doc_id):
+        return self.db.execute('''SELECT author_id, document_id, year, body FROM documents WHERE document_id=?''', (doc_id,)).fetchone()
+
+    def documents(self, author_id, entities):
+        return self.db.execute('''
+            SELECT document_id, year, entity, COUNT(*)
+            FROM entity_occurrences
+            WHERE author_id=? AND entity IN ({})
+            GROUP BY document_id, entity'''.format(join_entities_sql(entities)), (author_id,)).fetchall()
 
     def institution(self, author_id):
         return self.db.execute('''SELECT institution FROM authors WHERE author_id=?''', (author_id,)).fetchall()[0][0]
