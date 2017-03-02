@@ -16,10 +16,12 @@ function issueQuery() {
 	.done(
 		function(data) {
 			$('#results').show();
-			fillResults($("#results-list-right"), data["experts_efiaf"], data["query_entities"]);
 			fillResults($("#results-list-left"), data["experts_cossim_efiaf"], data["query_entities"]);
-			$("#time-right").text(data["time_efiaf"].toFixed(3) + " sec")
+			fillResults($("#results-list-middle"), data["experts_efiaf"], data["query_entities"]);
+			fillResults($("#results-list-right"), data["experts_eciaf"], data["query_entities"]);
 			$("#time-left").text(data["time_cossim_efiaf"].toFixed(3) + " sec")
+			$("#time-middle").text(data["time_efiaf"].toFixed(3) + " sec")
+			$("#time-right").text(data["time_eciaf"].toFixed(3) + " sec")
 			fillQueryEntities($("#query-entities"), data["query_entities"])
 		}
 	)
@@ -86,7 +88,7 @@ function updateAndShowModal(author_id, author_name, query_entities){
 	.done(
 		function(data) {
 			$.each(data, function(docid, docdata) {
-				tbody = $("<tbody>").append($( "<thead><tr><th>Entity</th><th>Occ.</th></tr></thead>" ))
+				tbody = $("<tbody>")
 				$.each(docdata["entities"], function(i, e) {
 					tbody.append(
 						$("<tr>")
@@ -95,7 +97,13 @@ function updateAndShowModal(author_id, author_name, query_entities){
 					)
 				} 
 				)
-				popover_body = $("<div>").append($("<span>").text("Year "+docdata["year"])).append($("<table>").attr("class", "table").append(tbody))
+
+				table = $("<table>").attr("class", "table")
+						.append($( "<thead><tr><th>Entity</th><th>Occ.</th></tr></thead>" ))
+						.append(tbody)
+
+
+				popover_body = $("<div>").append($("<span>").text("Year "+docdata["year"])).append(table)
 				$("#annotations-modal-doc-list").append(
 					$("<li>").addClass("list-group-item")
 						.attr("data-container", "body")
