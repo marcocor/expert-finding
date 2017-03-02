@@ -16,12 +16,14 @@ function issueQuery() {
 	.done(
 		function(data) {
 			$('#results').show();
-			fillResults($("#results-list-left"), data["experts_cossim_efiaf"], data["query_entities"]);
-			fillResults($("#results-list-middle"), data["experts_efiaf"], data["query_entities"]);
-			fillResults($("#results-list-right"), data["experts_eciaf"], data["query_entities"]);
-			$("#time-left").text(data["time_cossim_efiaf"].toFixed(3) + " sec")
-			$("#time-middle").text(data["time_efiaf"].toFixed(3) + " sec")
-			$("#time-right").text(data["time_eciaf"].toFixed(3) + " sec")
+			fillResults($("#results-list-cos-ef-iaf"), data["experts_cossim_efiaf"], data["query_entities"]);
+			fillResults($("#results-list-ef-iaf"), data["experts_efiaf"], data["query_entities"]);
+			fillResults($("#results-list-ec-iaf"), data["experts_eciaf"], data["query_entities"]);
+			fillResults($("#results-list-log-ec-ef-iaf"), data["experts_log_ec_ef_iaf"], data["query_entities"]);
+			$("#time-cos-ef-iaf").text(data["time_cossim_efiaf"].toFixed(3) + " sec")
+			$("#time-ef-iaf").text(data["time_efiaf"].toFixed(3) + " sec")
+			$("#time-ec-iaf").text(data["time_eciaf"].toFixed(3) + " sec")
+			$("#time-log-ec-ef-iaf").text(data["time_log_ec_ef_iaf"].toFixed(3) + " sec")
 			fillQueryEntities($("#query-entities"), data["query_entities"])
 		}
 	)

@@ -55,11 +55,14 @@ def find_expert():
     query = request.args.get('q')
     res_efiaf, time_efiaf, _ = exf.find_expert(query, ExpertFinding.efiaf_score)
     res_eciaf, time_eciaf, _ = exf.find_expert(query, ExpertFinding.eciaf_score)
+    res_log_ec_ef_iaf, time_log_ec_ef_iaf, _ = exf.find_expert(query, ExpertFinding.log_ec_ef_iaf_score)
     res_cosim_efiaf, time_cosim_efiaf, query_entities = exf.find_expert(query, ExpertFinding.cossim_efiaf_score)
     return jsonify(experts_eciaf = res_eciaf,
                    time_eciaf = time_eciaf,
                    experts_efiaf = res_efiaf,
                    time_efiaf = time_efiaf,
+                   experts_log_ec_ef_iaf = res_log_ec_ef_iaf,
+                   time_log_ec_ef_iaf = time_log_ec_ef_iaf,
                    experts_cossim_efiaf = res_cosim_efiaf,
                    time_cossim_efiaf = time_cosim_efiaf,
                    query_entities = list(query_entities),
