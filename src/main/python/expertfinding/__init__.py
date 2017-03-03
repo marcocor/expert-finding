@@ -259,6 +259,12 @@ class ExpertFinding(object):
             WHERE entity IN ({}) AND rho > ?'''.format(join_entities_sql(entities)), (DEFAULT_MIN_SCORE,)).fetchall()
         return [t[0] for t in result]
 
+    def authors_completion(self, terms):
+        """
+        Returns author names autocompletion for terms.
+        """
+        return self.db.execute(u'''SELECT * FROM "authors" WHERE name LIKE ? LIMIT 50''', (u"%{}%".format(terms),)).fetchall()
+
     def cossim_efiaf_score(self, query_entities, author_id):
         author_entity_to_efiaf = dict((e[0], e[3]) for e in self.ef_iaf(author_id))
         query_entity_popularity = dict(self.entity_popularity(query_entities))

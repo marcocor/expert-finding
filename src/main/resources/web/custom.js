@@ -7,6 +7,41 @@ $('#query-input').keypress(function (event) {
   	}
 });
 
+$("#author-search").select2({
+  ajax: {
+    url: "/completion",
+    dataType: 'json',
+    delay: 150,
+    data: function (params) {
+      return {
+        q: params.term,
+      };
+    },
+    processResults: function (data) {
+      return {
+        results: $.map(data.authors, function (author) {
+				          return {
+				            text: author.name,
+				            id: author.id,
+				            institution: author.institution,
+				          }
+                     })
+            };
+    },
+    cache: true
+  },
+  escapeMarkup: function (markup) { return markup; },
+  templateResult: function (author) {return author.text + " (" + author.institution + ") id=" + author.id},
+  minimumInputLength: 2,
+})
+.change(
+		function () {
+			author_id = $(this).val();
+			updateAndShowAuthorModal(author_id);
+		}
+)
+
+
 function issueQuery() {
 	query = $('#query-input').val();
 	$('#loader').show();
@@ -77,7 +112,7 @@ function refreshModalDocument(){
 	)
 }
 
-function updateAndShowModal(author_id, author_name, query_entities){
+function updateAndShowDocumentModal(author_id, author_name, query_entities){
 	$("#annotations-modal-author-name").text(author_name + " (id " + author_id + ")")
 	$("#annotations-modal-doc-body").empty()
 	$("#annotations-modal-doc-list").empty()
@@ -128,6 +163,29 @@ function updateAndShowModal(author_id, author_name, query_entities){
 	$("#annotations-modal").modal()
 }
 
+function updateAndShowAuthorModal(author_id){
+	$("#author-modal-doc-list").empty()
+    var queryAPI = "/author";
+    $.getJSON(queryAPI, {
+    						"id": author_id,
+    					}
+    )
+	.done(
+		function(data) {
+			$(".author-modal-author-name").text(data.name)
+			$("#author-modal-author-id").text(data.id)
+			$("#author-modal-author-doc-count").text(data.papers_count)
+		}
+	)
+	.fail(
+		function(data) {
+			alert("Author request failed.")
+		}
+	)
+
+	$("#author-modal").modal()
+}
+
 function fillResults(li, results, query_entities) {
 	li.empty();
 	$.each(results, function(i, r) {
@@ -146,7 +204,7 @@ function fillResults(li, results, query_entities) {
 				)
 				.click(
 					function() {
-						updateAndShowModal(r["author_id"], r["name"], query_entities)
+						updateAndShowDocumentModal(r["author_id"], r["name"], query_entities)
 						}
 				)
 				.append($("<span>").addClass('badge').text(r["score"].toFixed(3))));

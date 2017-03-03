@@ -12,6 +12,7 @@ import tagme
 import logging
 from expertfinding import ExpertFinding
 import os
+import re
 
 app = Flask(__name__, static_folder=os.path.join("..", "..", "..", "resources", "web"), static_path="/static")
 
@@ -67,6 +68,26 @@ def find_expert():
                    time_cossim_efiaf = time_cosim_efiaf,
                    query_entities = list(query_entities),
                    )
+
+@app.route('/completion')
+def complete_name():
+    global exf
+    query = re.sub(r"[%\s]+", "%", request.args.get('q'))
+    return jsonify(authors = [{"id": author_id,
+                               "name": name,
+                               "institution": institution,
+                              }
+                              for author_id, name, institution in exf.authors_completion(query)])
+
+@app.route('/author')
+def author_info():
+    global exf
+    author_id = request.args.get('id')
+    return jsonify(
+        id = author_id,
+        name = exf.name(author_id),
+        papers_count = exf.author_papers_count(author_id),
+        )
 
 def main():
     global exf
