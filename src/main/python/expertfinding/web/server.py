@@ -5,14 +5,17 @@ Created on Feb 21, 2017
 '''
 
 from argparse import ArgumentParser
+from collections import Counter
 from flask import Flask, jsonify, request, redirect
 import flask
-import sys
-import tagme
 import logging
-from expertfinding import ExpertFinding
 import os
 import re
+import sys
+import tagme
+
+from expertfinding import ExpertFinding
+
 
 app = Flask(__name__, static_folder=os.path.join("..", "..", "..", "resources", "web"), static_path="/static")
 
@@ -73,20 +76,29 @@ def find_expert():
 def complete_name():
     global exf
     query = re.sub(r"[%\s]+", "%", request.args.get('q'))
-    return jsonify(authors = [{"id": author_id,
-                               "name": name,
-                               "institution": institution,
-                              }
-                              for author_id, name, institution in exf.authors_completion(query)])
+    return jsonify(authors=[{"id": author_id,
+                             "name": name,
+                             "institution": institution,
+                            }
+                            for author_id, name, institution in exf.authors_completion(query)])
 
 @app.route('/author')
 def author_info():
     global exf
     author_id = request.args.get('id')
+    entity_freq = [{"entity": entity,
+      "frequency": author_freq,
+      "years": sorted(Counter([int(y) for y in years.split(",")]).items())
+      }
+    for entity, author_freq, years, _ in exf.author_entity_frequency(author_id)]
+    
+    entity_freq.sort(key=lambda e: e["frequency"], reverse=True)
+    
     return jsonify(
-        id = author_id,
-        name = exf.name(author_id),
-        papers_count = exf.author_papers_count(author_id),
+        id=author_id,
+        name=exf.name(author_id),
+        papers_count=exf.author_papers_count(author_id),
+        entities=entity_freq,
         )
 
 def main():

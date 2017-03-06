@@ -142,9 +142,23 @@ function updateAndShowAuthorModal(author_id) {
 	$.getJSON(queryAPI, {
 		"id" : author_id,
 	}).done(function(data) {
+		$("#author-modal-entity-table").empty()
+
 		$(".author-modal-author-name").text(data.name)
 		$("#author-modal-author-id").text(data.id)
 		$("#author-modal-author-doc-count").text(data.papers_count)
+
+		$.each(data.entities, function(i, e) {
+			row = $("<tr>")
+			$("#author-modal-entity-table").append(row)
+			row.append($("<td>").append($("<span>").text(e.entity).append($("<span>").addClass("badge").text(e.frequency))))
+			left_td = $("<td>")
+			$.each(e.years, function(i, e_y) {
+				left_td.append($("<span>").text(" " + e_y[0] + " ").append($("<span>").addClass("badge").text(e_y[1])))
+			})
+			row.append(left_td)
+		})
+
 	}).fail(function(data) {
 		alert("Author request failed.")
 	})
