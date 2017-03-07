@@ -3,10 +3,12 @@
 from argparse import ArgumentParser
 import codecs
 import logging
+from multiprocessing import Pool
 import os
 from subprocess import check_output
 import sys
 import tagme
+import signal
 
 from expertfinding import ExpertFinding as EF
 
@@ -19,6 +21,19 @@ SCORING_FUNCTIONS = {foo.func_name: foo
                          EF.log_ec_ef_iaf_score
                          ]
                     }
+
+def initialize_ef_processor(storage_db, scoring_f):
+    global exf, scoring_foo
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+    exf = EF(storage_db, False)
+    scoring_foo = scoring_f
+
+
+def ef_processor(data):
+    global exf, scoring_foo
+    query_id, query = data
+    results = exf.find_expert(query, scoring_foo)[0]
+    return query_id, results
 
 
 def topics_generator(filename):
@@ -46,18 +61,18 @@ def main():
 
     tagme.GCUBE_TOKEN = args.gcube_token
 
-    exf = EF(args.storage_db, False)
-    
     topics = dict((topic_id, t_desc) for topic_id, t_desc in topics_generator(args.topics))
 
-    query_ids = sorted(topic_id for topic_id, _, _ in qrels_generator(args.qrels))
-    
-    for scoring_foo in [SCORING_FUNCTIONS[scoring_f_name] for scoring_f_name in args.scoring]: 
-        results = dict(
-            (
-                q_id,
-                exf.find_expert(topics[q_id], scoring_foo)[0],
-            ) for q_id in query_ids)
+    queries = sorted((topic_id, topics[topic_id]) for topic_id, _, _ in qrels_generator(args.qrels))
+
+    for scoring_foo in [SCORING_FUNCTIONS[scoring_f_name] for scoring_f_name in args.scoring]:
+        pool = Pool(initializer=initialize_ef_processor, initargs=(args.storage_db, scoring_foo))
+        try:
+            results = dict(pool.map(ef_processor, queries))
+        except KeyboardInterrupt:
+            pool.terminate()
+            pool.join()
+
         results_filename_base = "{}_{}".format(scoring_foo.func_name, os.path.split(args.qrels)[-1].replace(".qrel", ""))
         results_filename = results_filename_base + ".results"
         with open(results_filename, "w") as results_f:
