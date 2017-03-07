@@ -19,8 +19,6 @@ import expertfinding
 __all__ = []
 
 DEFAULT_MIN_SCORE = 0.20
-FLUSH_EVERY = 100
-
 
 def legit_document(doc_body):
     return doc_body is not None and len(doc_body) > 10
@@ -292,6 +290,7 @@ class ExpertFinding(object):
         return sum((math.log(author_entity_to_ec[e]) + author_entity_to_ec[e]/float(author_papers)) * entity_popularity[e] for e in set(query_entities) & set(author_entity_to_ec.keys()))
 
     def find_expert(self, query, scoring):
+        logging.debug(u"Processing query: {}".format(query))
         start_time = time.time()
         query_entities =  set(a.entity_title for a in entities(query))
         logging.debug(u"Found the following entities in the query: {}".format(u",".join(query_entities)))
