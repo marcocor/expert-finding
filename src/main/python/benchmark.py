@@ -3,6 +3,7 @@
 from argparse import ArgumentParser
 import codecs
 import logging
+import os
 from subprocess import check_output
 import sys
 import tagme
@@ -57,14 +58,15 @@ def main():
                 q_id,
                 exf.find_expert(topics[q_id], scoring_foo)[0],
             ) for q_id in query_ids)
-        results_filename = "{}.results".format(scoring_foo.func_name)
+        results_filename_base = "{}_{}".format(scoring_foo.func_name, os.path.split(args.qrels)[-1].replace(".qrel", ""))
+        results_filename = results_filename_base + ".results"
         with open(results_filename, "w") as results_f:
             for q_id in results:
                 for hit in results[q_id]:
                     results_f.write("{} 0 {} 0 {} {}\n".format(q_id, hit["author_id"], hit["score"], scoring_foo.func_name))
         evaluation = check_output(["trec_eval", "-c", "-q", "-M", "1000", "-m", "all_trec", args.qrels, results_filename])
         print evaluation
-        with open("{}.eval".format(scoring_foo.func_name), "w") as eval_f:
+        with open(results_filename_base + ".eval", "w") as eval_f:
             eval_f.write(evaluation)
 
 
