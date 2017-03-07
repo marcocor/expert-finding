@@ -49,7 +49,7 @@ def annotated_text(text, annotations):
 
 
 def join_entities_sql(entities):
-    return u", ".join(u"'{}'".format(t) for t in entities)
+    return u", ".join(u"'{}'".format(t.replace("'", "''")) for t in entities)
 
 
 class ExpertFindingBuilder(object):
