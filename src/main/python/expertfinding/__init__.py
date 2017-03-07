@@ -267,7 +267,7 @@ class ExpertFinding(object):
         author_entity_to_efiaf = dict((e[0], e[3]) for e in self.ef_iaf(author_id))
         query_entity_popularity = dict(self.entity_popularity(query_entities))
         total_papers = self.total_papers()
-        query_entity_to_efiaf = dict((e, 1.0/len(query_entities) * log(total_papers/float(query_entity_popularity[e]))) for e in query_entities)
+        query_entity_to_efiaf = dict((e, 1.0/len(query_entities) * log(total_papers/float(query_entity_popularity[e]))) for e in query_entity_popularity.keys())
         
         return sum(author_entity_to_efiaf[e] * query_entity_to_efiaf[e] for e in set(author_entity_to_efiaf.keys()) & set(query_entity_to_efiaf.keys())) \
             / (math.sqrt(sum(author_entity_to_efiaf.values())) * math.sqrt(sum(query_entity_to_efiaf.values())))
