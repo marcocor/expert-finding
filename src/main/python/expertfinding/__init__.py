@@ -184,7 +184,10 @@ class ExpertFinding(object):
     def total_papers(self):
         return self.db.execute(u'''SELECT COUNT(*) FROM documents''').fetchall()[0][0]
             
-    def ef_iaf(self, author_id):
+    def ef_iaf_author(self, author_id):
+        """
+        Given an author, retrieve the entities cited by him, their EF and IAF.
+        """
         total_papers = self.total_papers()
         author_entity_frequency = self.author_entity_frequency_and_popularity(author_id)
         author_papers = self.author_papers_count(author_id)
@@ -196,6 +199,12 @@ class ExpertFinding(object):
                  max_rho,
                  [int(y) for y in years.split(",")],
                 ) for entity, entity_author_freq, entity_popularity,  years, max_rho in author_entity_frequency), key=lambda t: t[3], reverse=True)
+
+    def ef_iaf_entities(self, entities):
+        total_papers = self.total_papers()
+        query_entity_popularity = dict(self.entity_popularity(entities))
+        return dict((e, 1.0/len(entities) * log(total_papers/float(query_entity_popularity[e]))) for e in query_entity_popularity.keys())
+
 
     def author_papers_count(self, author_id):
         return self.db.execute(u'''SELECT COUNT(DISTINCT(document_id)) FROM entity_occurrences WHERE author_id=?''', (author_id,)).fetchall()[0][0]
@@ -282,10 +291,8 @@ class ExpertFinding(object):
         self.rel_dict.commit()
 
     def cossim_efiaf_score(self, query_entities, author_id):
-        author_entity_to_efiaf = dict((e[0], e[3]) for e in self.ef_iaf(author_id))
-        query_entity_popularity = dict(self.entity_popularity(query_entities))
-        total_papers = self.total_papers()
-        query_entity_to_efiaf = dict((e, 1.0/len(query_entities) * log(total_papers/float(query_entity_popularity[e]))) for e in query_entity_popularity.keys())
+        author_entity_to_efiaf = dict((e[0], e[3]) for e in self.ef_iaf_author(author_id))
+        query_entity_to_efiaf = self.ef_iaf_entities(query_entities)
         
         return sum(author_entity_to_efiaf[e] * query_entity_to_efiaf[e] for e in set(author_entity_to_efiaf.keys()) & set(query_entity_to_efiaf.keys())) \
             / (math.sqrt(sum(author_entity_to_efiaf.values())) * math.sqrt(sum(query_entity_to_efiaf.values())))
@@ -293,19 +300,19 @@ class ExpertFinding(object):
     def efiaf_score(self, query_entities, author_id):
         author_papers = self.author_papers_count(author_id)
         author_entity_to_ef = dict((t[0], t[1]/float(author_papers)) for t in self.author_entity_frequency(author_id))
-        entity_popularity = dict((t[0], t[1]) for t in self.entity_popularity(query_entities))
-        return sum(author_entity_to_ef[e] * entity_popularity[e] for e in set(query_entities) & set(author_entity_to_ef.keys()))
+        query_entity_to_efiaf = self.ef_iaf_entities(query_entities)
+        return sum(author_entity_to_ef[e] * query_entity_to_efiaf[e] for e in set(query_entities) & set(author_entity_to_ef.keys()))
 
     def eciaf_score(self, query_entities, author_id):
         author_entity_to_ec = dict((t[0], t[1]) for t in self.author_entity_frequency(author_id))
-        entity_popularity = dict((t[0], t[1]) for t in self.entity_popularity(query_entities))
-        return sum(author_entity_to_ec[e] * entity_popularity[e] for e in set(query_entities) & set(author_entity_to_ec.keys()))
+        query_entity_to_efiaf = self.ef_iaf_entities(query_entities)
+        return sum(author_entity_to_ec[e] * query_entity_to_efiaf[e] for e in set(query_entities) & set(author_entity_to_ec.keys()))
 
     def log_ec_ef_iaf_score(self, query_entities, author_id):
         author_papers = self.author_papers_count(author_id)
         author_entity_to_ec = dict((t[0], t[1]) for t in self.author_entity_frequency(author_id))
-        entity_popularity = dict((t[0], t[1]) for t in self.entity_popularity(query_entities))
-        return sum((math.log(author_entity_to_ec[e]) + author_entity_to_ec[e]/float(author_papers)) * entity_popularity[e] for e in set(query_entities) & set(author_entity_to_ec.keys()))
+        query_entity_to_efiaf = self.ef_iaf_entities(query_entities)
+        return sum((math.log(author_entity_to_ec[e]) + author_entity_to_ec[e]/float(author_papers)) * query_entity_to_efiaf[e] for e in set(query_entities) & set(author_entity_to_ec.keys()))
 
     def relatedness_geom(self, query_entities, author_id):
         e_a_f = self.author_entity_frequency(author_id)
