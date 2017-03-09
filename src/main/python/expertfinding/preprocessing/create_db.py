@@ -42,7 +42,7 @@ def main():
 
     expertfinding.set_cache(args.cache_dir)
 
-    ef = ExpertFinding(args.storage_db)
+    ef = ExpertFinding(args.storage_db, erase=True)
     ef_builder = ef.builder()
 
     for input_f in glob(args.input):

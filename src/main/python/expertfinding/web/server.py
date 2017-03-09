@@ -57,20 +57,24 @@ def get_documents():
 def find_expert():
     global exf
     query = request.args.get('q')
-    res_efiaf, time_efiaf, _ = exf.find_expert(query, ExpertFinding.efiaf_score)
-    res_eciaf, time_eciaf, _ = exf.find_expert(query, ExpertFinding.eciaf_score)
-    res_log_ec_ef_iaf, time_log_ec_ef_iaf, _ = exf.find_expert(query, ExpertFinding.log_ec_ef_iaf_score)
-    res_cosim_efiaf, time_cosim_efiaf, query_entities = exf.find_expert(query, ExpertFinding.cossim_efiaf_score)
-    return jsonify(experts_eciaf = res_eciaf,
-                   time_eciaf = time_eciaf,
-                   experts_efiaf = res_efiaf,
-                   time_efiaf = time_efiaf,
-                   experts_log_ec_ef_iaf = res_log_ec_ef_iaf,
-                   time_log_ec_ef_iaf = time_log_ec_ef_iaf,
-                   experts_cossim_efiaf = res_cosim_efiaf,
-                   time_cossim_efiaf = time_cosim_efiaf,
-                   query_entities = list(query_entities),
-                   )
+    scoring_functions = {
+        scoring_foo.func_name.replace("_score", ""): scoring_foo
+        for scoring_foo in [
+            ExpertFinding.efiaf_score,
+            ExpertFinding.eciaf_score,
+            ExpertFinding.log_ec_ef_iaf_score,
+            ExpertFinding.cossim_efiaf_score,
+            ExpertFinding.relatedness_geom
+            ]}
+    
+    result = dict()
+    for scoring_f_name in scoring_functions.keys():
+        res, time, query_entities = exf.find_expert(query, scoring_functions[scoring_f_name])
+        result["experts_" + scoring_f_name] = res
+        result["time_" + scoring_f_name] = time
+        result["query_entities"] = list(query_entities)
+        
+    return jsonify(result)
 
 @app.route('/completion')
 def complete_name():
@@ -106,12 +110,13 @@ def main():
     '''Command line options.'''
     parser = ArgumentParser()
     parser.add_argument("-s", "--storage_db", required=True, action="store", help="Storage DB file")
+    parser.add_argument("-r", "--relatedness_dict", required=True, action="store", help="Relatedness persistent dictionary file")
     parser.add_argument("-g", "--gcube_token", required=True, action="store", help="Tagme authentication gcube token")
     args = parser.parse_args()
 
     tagme.GCUBE_TOKEN = args.gcube_token
 
-    exf = ExpertFinding(args.storage_db, False)
+    exf = ExpertFinding(args.storage_db, relatedness_dict_file=args.relatedness_dict)
     return app.run(host="0.0.0.0")
     
 

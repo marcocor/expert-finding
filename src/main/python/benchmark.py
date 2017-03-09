@@ -18,14 +18,15 @@ SCORING_FUNCTIONS = {foo.func_name: foo
                          EF.cossim_efiaf_score,
                          EF.efiaf_score,
                          EF.eciaf_score,
-                         EF.log_ec_ef_iaf_score
+                         EF.log_ec_ef_iaf_score,
+                         EF.relatedness_geom,
                          ]
                     }
 
-def initialize_ef_processor(storage_db, scoring_f):
+def initialize_ef_processor(storage_db, scoring_f, rel_dict_file):
     global exf, scoring_foo
     signal.signal(signal.SIGINT, signal.SIG_IGN)
-    exf = EF(storage_db, False)
+    exf = EF(storage_db, relatedness_dict_file=rel_dict_file)
     scoring_foo = scoring_f
 
 
@@ -53,6 +54,7 @@ def qrels_generator(filename):
 def main():
     parser = ArgumentParser()
     parser.add_argument("-s", "--storage_db", required=True, action="store", help="Storage DB file")
+    parser.add_argument("-r", "--relatedness_dict", required=True, action="store", help="Relatedness persistent dictionary file")
     parser.add_argument("-g", "--gcube_token", required=True, action="store", help="Tagme authentication gcube token")
     parser.add_argument("-t", "--topics", required=True, action="store", help="Topic id-description mapping file")
     parser.add_argument("-q", "--qrels", required=True, action="store", help="Qrel file")
@@ -66,7 +68,7 @@ def main():
     queries = sorted((topic_id, topics[topic_id]) for topic_id, _, _ in qrels_generator(args.qrels))
 
     for scoring_foo in [SCORING_FUNCTIONS[scoring_f_name] for scoring_f_name in args.scoring]:
-        pool = Pool(initializer=initialize_ef_processor, initargs=(args.storage_db, scoring_foo))
+        pool = Pool(initializer=initialize_ef_processor, initargs=(args.storage_db, scoring_foo, args.relatedness_dict))
         try:
             results = dict(pool.map(ef_processor, queries))
         except KeyboardInterrupt:

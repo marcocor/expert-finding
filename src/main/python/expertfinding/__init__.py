@@ -2,13 +2,15 @@ from astroid.__pkginfo__ import author
 import cgi
 from collections import Counter
 import logging
-from math import log
+from math import log, exp
 import math
+from numpy import mean
 import os
 import pyfscache
 import re
 from scipy import stats
 import sqlite3
+from sqlitedict import SqliteDict
 import string
 import tagme
 import time
@@ -49,6 +51,11 @@ def annotated_text(text, annotations):
 def join_entities_sql(entities):
     return u", ".join(u"'{}'".format(t.replace("'", "''")) for t in entities)
 
+def weighted_geom_mean(vals_weights):
+    return exp(sum(w * log(v) for v, w in vals_weights) / sum(w for _, w in vals_weights))
+
+def _str_titles(t1, t2):
+    return unicode(sorted([t1, t2])).encode("utf-8")
 
 class ExpertFindingBuilder(object):
 
@@ -121,11 +128,12 @@ class ExpertFindingBuilder(object):
 
 class ExpertFinding(object):
 
-    def __init__(self, storage_db, erase=True):
+    def __init__(self, storage_db, erase=False, relatedness_dict_file=None):
         if erase and os.path.isfile(storage_db):
             os.remove(storage_db)
         self.db_connection = sqlite3.connect(storage_db)
         self.db = self.db_connection.cursor()
+        self.rel_dict = SqliteDict(relatedness_dict_file) if relatedness_dict_file else dict()
 
     def builder(self):
         return ExpertFindingBuilder(self)
@@ -263,6 +271,16 @@ class ExpertFinding(object):
         """
         return self.db.execute(u'''SELECT * FROM "authors" WHERE name LIKE ? LIMIT 50''', (u"%{}%".format(terms),)).fetchall()
 
+    def _prefetch_relatedness(self, entity_group_1, entity_group_2):
+        pairs = ((e1, e2) for e1 in entity_group_1 for e2 in entity_group_2)
+        pairs_to_retrieve = [p for p in pairs if _str_titles(*p) not in self.rel_dict]
+        if pairs_to_retrieve:
+            for titles, rel in tagme.relatedness_title(pairs_to_retrieve):
+                self.rel_dict[_str_titles(*titles)] = rel
+        for p in pairs:
+            assert _str_titles(*p) in self.rel_dict
+        self.rel_dict.commit()
+
     def cossim_efiaf_score(self, query_entities, author_id):
         author_entity_to_efiaf = dict((e[0], e[3]) for e in self.ef_iaf(author_id))
         query_entity_popularity = dict(self.entity_popularity(query_entities))
@@ -288,6 +306,23 @@ class ExpertFinding(object):
         author_entity_to_ec = dict((t[0], t[1]) for t in self.author_entity_frequency(author_id))
         entity_popularity = dict((t[0], t[1]) for t in self.entity_popularity(query_entities))
         return sum((math.log(author_entity_to_ec[e]) + author_entity_to_ec[e]/float(author_papers)) * entity_popularity[e] for e in set(query_entities) & set(author_entity_to_ec.keys()))
+
+    def relatedness_geom(self, query_entities, author_id):
+        e_a_f = self.author_entity_frequency(author_id)
+        author_entity_to_ec = dict((t[0], t[1]) for t in e_a_f)
+        author_entity_to_maxrho = dict((t[0], t[3]) for t in e_a_f)
+        
+        alpha = 0.1
+        self._prefetch_relatedness(query_entities, author_entity_to_ec.keys())
+        
+        relatedness_weights = {}
+        for q_entity in query_entities:
+            q_entity_relatedness = [(a_entity, self.rel_dict[_str_titles(q_entity, a_entity)]) for a_entity in author_entity_to_ec.keys()] 
+            val_weights = [(1.0 - r + alpha, author_entity_to_ec[a_entity] * author_entity_to_maxrho[a_entity]) for a_entity, r in q_entity_relatedness]
+            relatedness_weights[q_entity] = val_weights
+
+        return mean([1 - weighted_geom_mean(relatedness_weights[q_entity]) + alpha for q_entity in relatedness_weights])
+
 
     def find_expert(self, query, scoring):
         logging.debug(u"Processing query: {}".format(query))
