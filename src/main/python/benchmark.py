@@ -5,12 +5,17 @@ import codecs
 import logging
 from multiprocessing import Pool
 import os
+from random import random
+import signal
 from subprocess import check_output
 import sys
 import tagme
-import signal
 
 from expertfinding import ExpertFinding as EF
+
+
+def random_score(**args):
+    return random()
 
 
 SCORING_FUNCTIONS = {foo.func_name: foo
@@ -20,6 +25,7 @@ SCORING_FUNCTIONS = {foo.func_name: foo
                          EF.eciaf_score,
                          EF.log_ec_ef_iaf_score,
                          EF.relatedness_geom,
+                         random_score,
                          ]
                     }
 
