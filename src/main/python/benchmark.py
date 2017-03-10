@@ -14,7 +14,7 @@ import tagme
 from expertfinding import ExpertFinding as EF
 
 
-def random_score(**args):
+def random_score(*args):
     return random()
 
 
@@ -39,8 +39,8 @@ def initialize_ef_processor(storage_db, scoring_f, rel_dict_file):
 def ef_processor(data):
     global exf, scoring_foo
     query_id, query = data
-    results = exf.find_expert(query, scoring_foo)[0]
-    return query_id, results
+    hits, runtime, query_entities = exf.find_expert(query, scoring_foo)
+    return query_id, (hits, runtime, query_entities)
 
 
 def topics_generator(filename):
@@ -83,10 +83,17 @@ def main():
 
         results_filename_base = "{}_{}".format(scoring_foo.func_name, os.path.split(args.qrels)[-1].replace(".qrel", ""))
         results_filename = results_filename_base + ".results"
-        with open(results_filename, "w") as results_f:
+        runtime_filename = results_filename_base + ".runtime"
+        query_entities_filename = results_filename_base + ".queryentities"
+
+        with open(results_filename, "w") as results_f, open(runtime_filename, "w") as runtime_f, open(query_entities_filename, "w") as query_entities_f:
             for q_id in results:
-                for hit in results[q_id]:
+                hits, runtime, query_entities = results[q_id]
+                for hit in hits:
                     results_f.write("{} 0 {} 0 {} {}\n".format(q_id, hit["author_id"], hit["score"], scoring_foo.func_name))
+                runtime_f.write("{} {}\n".format(q_id, runtime))
+                query_entities_f.write(u"{} {}\n".format(q_id, u"; ".join(query_entities)).encode("utf-8"))
+
         evaluation = check_output(["trec_eval", "-c", "-q", "-M", "1000", "-m", "all_trec", args.qrels, results_filename])
         print evaluation
         with open(results_filename_base + ".eval", "w") as eval_f:
