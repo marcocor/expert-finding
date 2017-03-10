@@ -4,7 +4,7 @@ from collections import Counter
 import logging
 from math import log, exp
 import math
-from numpy import mean
+from numpy import clip, mean
 import os
 import pyfscache
 import re
@@ -319,16 +319,17 @@ class ExpertFinding(object):
         author_entity_to_ec = dict((t[0], t[1]) for t in e_a_f)
         author_entity_to_maxrho = dict((t[0], t[3]) for t in e_a_f)
         
-        alpha = 0.1
+        alpha = 10.0**-5
+        x = 10.0
         self._prefetch_relatedness(query_entities, author_entity_to_ec.keys())
         
         relatedness_weights = {}
         for q_entity in query_entities:
-            q_entity_relatedness = [(a_entity, self.rel_dict[_str_titles(q_entity, a_entity)]) for a_entity in author_entity_to_ec.keys()] 
-            val_weights = [(1.0 - r + alpha, author_entity_to_ec[a_entity] * author_entity_to_maxrho[a_entity]) for a_entity, r in q_entity_relatedness]
+            q_entity_relatedness = [(a_entity, self.rel_dict[_str_titles(q_entity, a_entity)]) for a_entity in author_entity_to_ec.keys()]
+            val_weights = [(1.0 - r**x + alpha, author_entity_to_ec[a_entity] * author_entity_to_maxrho[a_entity]) for a_entity, r in q_entity_relatedness]
             relatedness_weights[q_entity] = val_weights
 
-        return mean([1 - weighted_geom_mean(relatedness_weights[q_entity]) + alpha for q_entity in relatedness_weights])
+        return mean([clip(1 - weighted_geom_mean(relatedness_weights[q_entity]) + alpha, 0.0, 1.0) ** (1.0/x) for q_entity in relatedness_weights])
 
 
     def find_expert(self, query, scoring):
