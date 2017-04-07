@@ -1,0 +1,7 @@
+tagme
+pyfscache
+sqlitedict
+lxml
+langdetect
+unicodecsv
+flask
