@@ -21,9 +21,9 @@ def main():
     exf = ExpertFinding(args.storage_db, False)
     while True:
         query = raw_input("Query:")
-        res = exf.find_expert(query)
-        for name, a_id, score in res:
-            print "{} ({}) score={:.3f}".format(name, a_id, score)
+        res = exf.find_expert(query, ExpertFinding.eciaf_score)
+        for result in res[0]:
+            print "{} ({}) score={:.3f}".format(result["name"], result["author_id"], result["score"])
     return 0
 
 
