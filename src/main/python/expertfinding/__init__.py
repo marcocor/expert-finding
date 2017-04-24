@@ -15,8 +15,11 @@ import string
 import tagme
 import time
 
-import expertfinding
+import lucene
+from lucene import *
 
+import expertfinding
+from expertfinding.core import scoring
 
 __all__ = []
 
@@ -56,6 +59,9 @@ def weighted_geom_mean(vals_weights):
 
 def _str_titles(t1, t2):
     return unicode(sorted([t1, t2])).encode("utf-8")
+
+def beautify_str(s):
+    return s.replace("\n", " ").replace("\r", " ").encode('ascii', 'ignore')
 
 class ExpertFindingBuilder(object):
 
@@ -98,6 +104,15 @@ class ExpertFindingBuilder(object):
                 self._add_entities(p.author_id, document_id, p.year, p.institution, ent)
                 self._add_document_body(p.author_id, document_id, p.year, p.abstract, ent)
                 document_id += 1
+                
+                doc = Document()
+                doc.add(Field("author_id", beautify_str(p.author_id), Field.Store.YES, Field.Index.ANALYZED))
+                doc.add(Field("author_name", beautify_str(p.name), Field.Store.YES, Field.Index.ANALYZED))
+                doc.add(Field("year", str(p.year), Field.Store.YES, Field.Index.ANALYZED))
+                doc.add(Field("institution", beautify_str(p.institution) , Field.Store.YES, Field.Index.ANALYZED))
+                doc.add(Field("text", beautify_str(p.abstract) , Field.Store.YES, Field.Index.ANALYZED))
+                self.ef.index_writer.addDocument(doc)
+        
         self.ef.db_connection.commit()
 
     def entities(self, author_id):
@@ -128,13 +143,21 @@ class ExpertFindingBuilder(object):
 
 class ExpertFinding(object):
 
-    def __init__(self, storage_db, erase=False, relatedness_dict_file=None):
+    def __init__(self, storage_db, lucene_dir, erase=False, relatedness_dict_file=None):
         if erase and os.path.isfile(storage_db):
             os.remove(storage_db)
         self.db_connection = sqlite3.connect(storage_db)
         self.db = self.db_connection.cursor()
         self.rel_dict = SqliteDict(relatedness_dict_file) if relatedness_dict_file else dict()
 
+        lucene.initVM()
+        logging.info("Lucene index directory: %s", lucene_dir)
+        index_dir = SimpleFSDirectory(File(lucene_dir))
+        self.analyzer = ClassicAnalyzer(Version.LUCENE_35)
+        self.index_writer = IndexWriter(index_dir, self.analyzer, True, IndexWriter.MaxFieldLength.UNLIMITED)
+        if not erase:
+            self.index_searcher = IndexSearcher(index_dir)
+        
     def builder(self):
         return ExpertFindingBuilder(self)
 
@@ -290,30 +313,6 @@ class ExpertFinding(object):
             assert _str_titles(*p) in self.rel_dict
         self.rel_dict.commit()
 
-    def cossim_efiaf_score(self, query_entities, author_id):
-        author_entity_to_efiaf = dict((e[0], e[3]) for e in self.ef_iaf_author(author_id))
-        query_entity_to_efiaf = self.ef_iaf_entities(query_entities)
-        
-        return sum(author_entity_to_efiaf[e] * query_entity_to_efiaf[e] for e in set(author_entity_to_efiaf.keys()) & set(query_entity_to_efiaf.keys())) \
-            / (math.sqrt(sum(author_entity_to_efiaf.values())) * math.sqrt(sum(query_entity_to_efiaf.values())))
-
-    def efiaf_score(self, query_entities, author_id):
-        author_papers = self.author_papers_count(author_id)
-        author_entity_to_ef = dict((t[0], t[1]/float(author_papers)) for t in self.author_entity_frequency(author_id))
-        query_entity_to_efiaf = self.ef_iaf_entities(query_entities)
-        return sum(author_entity_to_ef[e] * query_entity_to_efiaf[e] for e in set(query_entities) & set(author_entity_to_ef.keys()))
-
-    def eciaf_score(self, query_entities, author_id):
-        author_entity_to_ec = dict((t[0], t[1]) for t in self.author_entity_frequency(author_id))
-        query_entity_to_efiaf = self.ef_iaf_entities(query_entities)
-        return sum(author_entity_to_ec[e] * query_entity_to_efiaf[e] for e in set(query_entities) & set(author_entity_to_ec.keys()))
-
-    def log_ec_ef_iaf_score(self, query_entities, author_id):
-        author_papers = self.author_papers_count(author_id)
-        author_entity_to_ec = dict((t[0], t[1]) for t in self.author_entity_frequency(author_id))
-        query_entity_to_efiaf = self.ef_iaf_entities(query_entities)
-        return sum((math.log(author_entity_to_ec[e]) + author_entity_to_ec[e]/float(author_papers)) * query_entity_to_efiaf[e] for e in set(query_entities) & set(author_entity_to_ec.keys()))
-
     def relatedness_geom(self, query_entities, author_id):
         e_a_f = self.author_entity_frequency(author_id)
         author_entity_to_ec = dict((t[0], t[1]) for t in e_a_f)
@@ -332,19 +331,43 @@ class ExpertFinding(object):
         return mean([clip(1 - weighted_geom_mean(relatedness_weights[q_entity]) + alpha, 0.0, 1.0) ** (1.0/x) for q_entity in relatedness_weights])
 
 
-    def find_expert(self, query, scoring):
-        logging.debug(u"Processing query: {}".format(query))
+    def find_expert(self, input_query, scoring_functions=scoring.ENTITIES_SCORING_FUNCTIONS):
+        logging.debug(u"Processing query: {}".format(input_query))
         start_time = time.time()
-        query_entities =  set(a.entity_title for a in entities(query))
+        query_entities =  set(a.entity_title for a in entities(input_query))
         logging.debug(u"Found the following entities in the query: {}".format(u",".join(query_entities)))
         authors = self.citing_authors(query_entities) 
         logging.debug(u"Found %d authors that matched the query, computing score for each of them." % len(authors))
-        results = []
-        for author_id in authors:
-            score = scoring(self, query_entities, author_id)
-            name = self.name(author_id)
-            results.append({"name":name, "author_id":author_id, "score":score})
-            logging.debug(u"%s score=%.3f", name, score)
-        runtime = time.time() - start_time
-        logging.info("Query completed in %.3f sec" % (runtime,))
-        return sorted(results, key=lambda t: t["score"], reverse=True), runtime, query_entities
+
+        results = {}
+        for scoring_f in scoring_functions:
+            start_time = time.time()
+            scoring_f_name = scoring_f.func_name.replace("_score", "")
+            results[scoring_f_name] = scoring.score(self, scoring_f, query_entities, authors)      
+            runtime = time.time() - start_time
+            results["time_" + scoring_f_name] = runtime
+            logging.info("Query completed in %.3f sec" % (runtime,))
+            
+        results["query_entities"] = list(query_entities)
+        return results
+
+    def find_expert_lucene(self, input_query, scoring_functions=scoring.LUCENE_SCORING_FUNCTIONS):
+        logging.debug(u"Processing Lucene query: {}".format(input_query))
+        start_time = time.time()
+        query = QueryParser(Version.LUCENE_35, "text", self.analyzer).parse(input_query)
+        hits = self.index_searcher.search(query, 40)
+        query_result = {}
+
+        for hit in hits.scoreDocs:
+            doc = self.index_searcher.doc(hit.doc)
+            author_id = doc.get("author_id")
+            doc_score = hit.score
+            author_score = query_result.get(author_id, {'name': doc.get('author_name'), 'scores': []})
+            author_score['scores'].append(doc_score)
+            query_result[author_id] = author_score
+        
+        results = {}
+        for scoring_f in scoring_functions:
+            results[scoring_f.func_name.replace("_score", "")] = scoring_f(query_result)
+        
+        return results

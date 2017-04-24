@@ -68,6 +68,9 @@
 				<div class="row">
 					<button id="search-button" class="btn btn-lg btn-primary"
 						type="button">Search</button>
+
+					<button id="search-button-lucene" class="btn btn-lg btn-primary"
+						type="button">Search Lucene</button>
 				</div>
 			</form>
 			<div class="row">
@@ -140,7 +143,30 @@
 			</div>
 		</div>
 	</div>
-
+	<div id="lucene-results">
+		<div class="row">
+			<div class="col-md-offset-1 col-md-2">
+				<div class="row">
+					<div class="col-md-8">
+						<h3>Lucene max</h3>
+					</div>
+					<div class="col-md-4 time" id="time-lucene-max"></div>
+				</div>
+				<ul class="list-group" id="results-list-lucene-max">
+				</ul>
+			</div>
+			<div class="col-md-2">
+				<div class="row">
+					<div class="col-md-8">
+						<h3>Lucene mean</h3>
+					</div>
+					<div class="col-md-4 time" id="time-lucene-mean"></div>
+				</div>
+				<ul class="list-group" id="results-list-lucene-mean">
+				</ul>
+			</div>
+		</div>
+	</div>
 	<div id="annotations-modal" class="modal fade" role="dialog">
 		<div class="modal-dialog">
 			<div class="modal-content">

@@ -7,6 +7,7 @@ from argparse import ArgumentParser
 import logging
 import sys
 from expertfinding import ExpertFinding
+from expertfinding.core import scoring
 import tagme
 
 def main():
@@ -21,7 +22,7 @@ def main():
     exf = ExpertFinding(args.storage_db, False)
     while True:
         query = raw_input("Query:")
-        res = exf.find_expert(query, ExpertFinding.eciaf_score)
+        res = exf.find_expert(input_query=query, scoring_functions=[scoring.eciaf_score])
         for result in res[0]:
             print "{} ({}) score={:.3f}".format(result["name"], result["author_id"], result["score"])
     return 0

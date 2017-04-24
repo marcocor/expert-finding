@@ -36,17 +36,25 @@ def main():
     parser.add_argument("-c", "--cache_dir", required=True, action="store", help="Cache directory")
     parser.add_argument("-s", "--storage_db", required=True, action="store", help="Storage DB file")
     parser.add_argument("-g", "--gcube_token", required=True, action="store", help="Tagme authentication gcube token")
+    parser.add_argument("-l", "--lucene_dir", required=True, action="store", help="Lucene index root directory")
+    parser.add_argument("-miny", "--min_year", required=False, action="store", type=int, help="Minimum year to consider in document collection")
+    parser.add_argument("-maxy", "--max_year", required=False, action="store", type=int, help="Maximum year to consider in document collection")
     args = parser.parse_args()
     
     tagme.GCUBE_TOKEN = args.gcube_token
 
     expertfinding.set_cache(args.cache_dir)
 
-    ef = ExpertFinding(args.storage_db, erase=True)
+    ef = ExpertFinding(storage_db=args.storage_db, lucene_dir=args.lucene_dir, erase=True)
     ef_builder = ef.builder()
 
     for input_f in glob(args.input):
-        ef_builder.add_documents(input_f, datasetreader.paper_generator(input_f, args.input_format), MIN_YEAR, MAX_YEAR)
+        ef_builder.add_documents(input_f, datasetreader.paper_generator(input_f, args.input_format), args.min_year, args.max_year)
+
+    ef.index_writer.optimize()
+    ef.index_writer.close()
+    
+    
 
     return 0
 

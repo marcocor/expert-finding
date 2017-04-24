@@ -15,7 +15,9 @@ import sys
 import tagme
 
 from expertfinding import ExpertFinding
-
+from expertfinding.core import scoring
+from lucene import *
+import lucene
 
 app = Flask(__name__, static_folder=os.path.join("..", "..", "..", "resources", "web"), static_path="/static")
 
@@ -56,25 +58,19 @@ def get_documents():
 @app.route('/query')
 def find_expert():
     global exf
-    query = request.args.get('q')
-    scoring_functions = {
-        scoring_foo.func_name.replace("_score", ""): scoring_foo
-        for scoring_foo in [
-            ExpertFinding.efiaf_score,
-            ExpertFinding.eciaf_score,
-            ExpertFinding.log_ec_ef_iaf_score,
-            ExpertFinding.cossim_efiaf_score,
-            ExpertFinding.relatedness_geom
-            ]}
+    input_query = request.args.get('q')
+    results = exf.find_expert(input_query=input_query)
+
+    return jsonify(results)
+
+@app.route('/querylucene')
+def find_expert_lucene():
+    global exf
+    input_query = request.args.get('q')
+    results = exf.find_expert_lucene(input_query=input_query)
     
-    result = dict()
-    for scoring_f_name in scoring_functions.keys():
-        res, time, query_entities = exf.find_expert(query, scoring_functions[scoring_f_name])
-        result["experts_" + scoring_f_name] = res
-        result["time_" + scoring_f_name] = time
-        result["query_entities"] = list(query_entities)
-        
-    return jsonify(result)
+    return jsonify(results)
+
 
 @app.route('/completion')
 def complete_name():
@@ -111,12 +107,13 @@ def main():
     parser = ArgumentParser()
     parser.add_argument("-s", "--storage_db", required=True, action="store", help="Storage DB file")
     parser.add_argument("-r", "--relatedness_dict", required=True, action="store", help="Relatedness persistent dictionary file")
+    parser.add_argument("-l", "--lucene_dir", required=True, action="store", help="Lucene index root directory")
     parser.add_argument("-g", "--gcube_token", required=True, action="store", help="Tagme authentication gcube token")
     args = parser.parse_args()
 
     tagme.GCUBE_TOKEN = args.gcube_token
 
-    exf = ExpertFinding(args.storage_db, relatedness_dict_file=args.relatedness_dict)
+    exf = ExpertFinding(storage_db=args.storage_db, lucene_dir=args.lucene_dir, relatedness_dict_file=args.relatedness_dict)
     return app.run(host="0.0.0.0")
     
 
