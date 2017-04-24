@@ -16,8 +16,6 @@ import tagme
 
 from expertfinding import ExpertFinding
 from expertfinding.core import scoring
-from lucene import *
-import lucene
 
 app = Flask(__name__, static_folder=os.path.join("..", "..", "..", "resources", "web"), static_path="/static")
 
@@ -89,8 +87,7 @@ def author_info():
     entity_freq = [{"entity": entity,
       "frequency": author_freq,
       "years": sorted(Counter([int(y) for y in years.split(",")]).items())
-      }
-    for entity, author_freq, years, _ in exf.author_entity_frequency(author_id)]
+      } for entity, author_freq, years, _ in exf.author_entity_frequency(author_id)]
     
     entity_freq.sort(key=lambda e: e["frequency"], reverse=True)
     
@@ -99,7 +96,7 @@ def author_info():
         name=exf.name(author_id),
         papers_count=exf.author_papers_count(author_id),
         entities=entity_freq,
-        )
+    )
 
 def main():
     global exf

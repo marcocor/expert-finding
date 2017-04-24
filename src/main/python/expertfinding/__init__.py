@@ -16,7 +16,6 @@ import tagme
 import time
 
 import lucene
-from lucene import *
 
 import expertfinding
 from expertfinding.core import scoring
@@ -105,12 +104,12 @@ class ExpertFindingBuilder(object):
                 self._add_document_body(p.author_id, document_id, p.year, p.abstract, ent)
                 document_id += 1
                 
-                doc = Document()
-                doc.add(Field("author_id", beautify_str(p.author_id), Field.Store.YES, Field.Index.ANALYZED))
-                doc.add(Field("author_name", beautify_str(p.name), Field.Store.YES, Field.Index.ANALYZED))
-                doc.add(Field("year", str(p.year), Field.Store.YES, Field.Index.ANALYZED))
-                doc.add(Field("institution", beautify_str(p.institution) , Field.Store.YES, Field.Index.ANALYZED))
-                doc.add(Field("text", beautify_str(p.abstract) , Field.Store.YES, Field.Index.ANALYZED))
+                doc = lucene.Document()
+                doc.add(lucene.Field("author_id", beautify_str(p.author_id), lucene.Field.Store.YES, lucene.Field.Index.ANALYZED))
+                doc.add(lucene.Field("author_name", beautify_str(p.name), lucene.Field.Store.YES, lucene.Field.Index.ANALYZED))
+                doc.add(lucene.Field("year", str(p.year), lucene.Field.Store.YES, lucene.Field.Index.ANALYZED))
+                doc.add(lucene.Field("institution", beautify_str(p.institution) , lucene.Field.Store.YES, lucene.Field.Index.ANALYZED))
+                doc.add(lucene.Field("text", beautify_str(p.abstract) , lucene.Field.Store.YES, lucene.Field.Index.ANALYZED))
                 self.ef.index_writer.addDocument(doc)
         
         self.ef.db_connection.commit()
@@ -152,11 +151,11 @@ class ExpertFinding(object):
 
         lucene.initVM()
         logging.info("Lucene index directory: %s", lucene_dir)
-        index_dir = SimpleFSDirectory(File(lucene_dir))
-        self.analyzer = ClassicAnalyzer(Version.LUCENE_35)
-        self.index_writer = IndexWriter(index_dir, self.analyzer, True, IndexWriter.MaxFieldLength.UNLIMITED)
+        index_dir = lucene.SimpleFSDirectory(lucene.File(lucene_dir))
+        self.analyzer = lucene.ClassicAnalyzer(lucene.Version.LUCENE_35)
+        self.index_writer = lucene.IndexWriter(index_dir, self.analyzer, True, lucene.IndexWriter.MaxFieldLength.UNLIMITED)
         if not erase:
-            self.index_searcher = IndexSearcher(index_dir)
+            self.index_searcher = lucene.IndexSearcher(index_dir)
         
     def builder(self):
         return ExpertFindingBuilder(self)
@@ -354,7 +353,7 @@ class ExpertFinding(object):
     def find_expert_lucene(self, input_query, scoring_functions=scoring.LUCENE_SCORING_FUNCTIONS):
         logging.debug(u"Processing Lucene query: {}".format(input_query))
         start_time = time.time()
-        query = QueryParser(Version.LUCENE_35, "text", self.analyzer).parse(input_query)
+        query = lucene.QueryParser(lucene.Version.LUCENE_35, "text", self.analyzer).parse(input_query)
         hits = self.index_searcher.search(query, 40)
         query_result = {}
 
