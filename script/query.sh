@@ -4,4 +4,5 @@ source $ROOT_DIR/../expert-finding.conf
 
 python $ROOT_DIR/../src/main/python/query.py \
 	-s $STORAGE_DIR \
-	-g $TAGME_API_KEY
+	-g $TAGME_API_KEY \
+	-l $LUCENE_INDEX_DIR

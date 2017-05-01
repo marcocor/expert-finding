@@ -102,16 +102,17 @@ class ExpertFindingBuilder(object):
                 ent = entities(p.abstract)
                 self._add_entities(p.author_id, document_id, p.year, p.institution, ent)
                 self._add_document_body(p.author_id, document_id, p.year, p.abstract, ent)
-                document_id += 1
                 
                 doc = lucene.Document()
+                doc.add(lucene.Field("document_id", str(document_id), lucene.Field.Store.YES, lucene.Field.Index.ANALYZED))
                 doc.add(lucene.Field("author_id", beautify_str(p.author_id), lucene.Field.Store.YES, lucene.Field.Index.ANALYZED))
                 doc.add(lucene.Field("author_name", beautify_str(p.name), lucene.Field.Store.YES, lucene.Field.Index.ANALYZED))
                 doc.add(lucene.Field("year", str(p.year), lucene.Field.Store.YES, lucene.Field.Index.ANALYZED))
                 doc.add(lucene.Field("institution", beautify_str(p.institution) , lucene.Field.Store.YES, lucene.Field.Index.ANALYZED))
                 doc.add(lucene.Field("text", beautify_str(p.abstract) , lucene.Field.Store.YES, lucene.Field.Index.ANALYZED))
                 self.ef.index_writer.addDocument(doc)
-        
+
+                document_id += 1
         self.ef.db_connection.commit()
 
     def entities(self, author_id):
@@ -359,10 +360,12 @@ class ExpertFinding(object):
 
         for hit in hits.scoreDocs:
             doc = self.index_searcher.doc(hit.doc)
+            document_id = doc.get('document_id')
             author_id = doc.get("author_id")
             doc_score = hit.score
-            author_score = query_result.get(author_id, {'name': doc.get('author_name'), 'scores': []})
-            author_score['scores'].append(doc_score)
+            author_score = query_result.get(author_id, {'name': doc.get('author_name'), 'docs': {}, 'scores': {}})
+            author_score['docs'][document_id] = {'year':doc.get('year')}
+            author_score['scores'][document_id] = doc_score
             query_result[author_id] = author_score
         
         results = {}

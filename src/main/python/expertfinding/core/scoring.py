@@ -45,18 +45,21 @@ def lucene_max_score(authors_scores):
         results.append({
             "author_id": author_id,
             "name": authors_scores[author_id]["name"],
-            "score": max(authors_scores[author_id]["scores"])
+            "docs": authors_scores[author_id]["docs"],
+            "score": max(authors_scores[author_id]["scores"].values())
         })
-    
+
     return sorted(results, key=lambda t: t["score"], reverse=True)
 
 def lucene_mean_score(authors_scores):
     results = []
     for author_id in authors_scores.keys():
+        print authors_scores[author_id]["scores"].values()
         results.append({
             "author_id": author_id,
             "name": authors_scores[author_id]["name"],
-            "score": mean(authors_scores[author_id]["scores"])
+            "docs": authors_scores[author_id]["docs"],
+            "score": mean(authors_scores[author_id]["scores"].values())
         })
 
     return sorted(results, key=lambda t: t["score"], reverse=True)

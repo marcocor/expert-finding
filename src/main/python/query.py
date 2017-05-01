@@ -15,11 +15,12 @@ def main():
     parser = ArgumentParser()
     parser.add_argument("-s", "--storage_db", required=True, action="store", help="Storage DB file")
     parser.add_argument("-g", "--gcube_token", required=True, action="store", help="Tagme authentication gcube token")
+    parser.add_argument("-l", "--lucene_dir", required=True, action="store", help="Lucene index root directory")
     args = parser.parse_args()
 
     tagme.GCUBE_TOKEN = args.gcube_token
 
-    exf = ExpertFinding(args.storage_db, False)
+    exf = ExpertFinding(storage_db=args.storage_db, lucene_dir=args.lucene_dir, erase=False)
     while True:
         query = raw_input("Query:")
         res = exf.find_expert(input_query=query, scoring_functions=[scoring.eciaf_score])
