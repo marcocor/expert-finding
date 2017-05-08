@@ -27,9 +27,9 @@ def index():
 @app.route('/document')
 def get_document():
     global exf
-    docid = int(request.args.get('d'))
-    author_id, ret_doc_id, year, body = exf.document(docid)
-    return jsonify(author_id = author_id, ret_doc_id = ret_doc_id, year = year, body = body)
+    docid = str(request.args.get('d'))
+    doc = exf.data_layer.get_document(docid)
+    return jsonify(author_id=doc["author_id"], ret_doc_id=str(doc["_id"]), year=doc["year"], body=doc["text"])
 
 @app.route('/documents')
 def get_documents():
@@ -38,12 +38,14 @@ def get_documents():
     entities = flask.json.loads(request.args.get("e"))
     docid_to_year = dict()
     docid_to_entities = dict()
-    for document_id, year, entity, entity_count in exf.documents(author_id, entities):
-        docid_to_year[document_id] = year
-        if document_id not in docid_to_entities:
-            docid_to_entities[document_id] = []
-        docid_to_entities[document_id].append({"entity": entity, "count": entity_count})
-    
+
+    docs = exf.data_layer.get_document_containing_entities(author_id, entities)
+
+    for doc in docs:
+        document_id = str(doc['_id'])
+        docid_to_year[document_id] = doc['year']
+        docid_to_entities[document_id] = [{"entity": entity['entity'], "count": entity['count']} for entity in doc['entities']]
+
     return jsonify(dict((docid, {
                                     "year": docid_to_year[docid],
                                     "entities": docid_to_entities[docid]
@@ -58,7 +60,7 @@ def find_expert():
     global exf
     input_query = request.args.get('q')
     results = exf.find_expert(input_query=input_query)
-    
+
     return jsonify(results)
 
 @app.route('/querylucene')

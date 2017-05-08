@@ -174,9 +174,6 @@ class ExpertFinding(object):
 
         return author_to_entities_count
 
-    def author_papers_count(self, author_id):
-        return self.db.execute(u'''SELECT COUNT(DISTINCT(document_id)) FROM entity_occurrences WHERE author_id=?''', (author_id,)).fetchall()[0][0]
-
     def institution_papers_count(self, institution):
         return self.db.execute(u'''
             SELECT document_count
@@ -185,16 +182,6 @@ class ExpertFinding(object):
 
     def author_id(self, author_name):
         return [r[0] for r in self.db.execute(u'''SELECT author_id FROM authors WHERE name=?''', (author_name,)).fetchall()]
-
-    def document(self, doc_id):
-        return self.db.execute(u'''SELECT author_id, document_id, year, body FROM documents WHERE document_id=?''', (doc_id,)).fetchone()
-
-    def documents(self, author_id, entities):
-        return self.db.execute(u'''
-            SELECT document_id, year, entity, COUNT(*)
-            FROM entity_occurrences
-            WHERE author_id=? AND entity IN ({})
-            GROUP BY document_id, entity'''.format(join_entities_sql(entities)), (author_id,)).fetchall()
 
     def institution(self, author_id):
         return self.db.execute(u'''SELECT institution FROM authors WHERE author_id=?''', (author_id,)).fetchall()[0][0]
@@ -281,7 +268,7 @@ class ExpertFinding(object):
             runtime = time.time() - start_time
             results["time_" + scoring_f_name] = runtime
             logging.info("Query completed in %.3f sec", runtime)
-            
+
         results["query_entities"] = list(query_entities)
         return results
 

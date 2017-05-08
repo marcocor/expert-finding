@@ -3,6 +3,7 @@ import sqlite3
 import cgi
 import logging
 import pymongo
+from bson.objectid import ObjectId
 
 try:
     import lucene
@@ -217,6 +218,40 @@ class DataLayer():
             doc_entities[e.entity_title] = prev
 
         return doc_entities
+
+
+    def get_document_containing_entities(self, author_id, entities):
+        res = self.db_.documents.find({
+            "author_id": author_id,
+            "entities": {
+                "$elemMatch": {
+                    "entity": {
+                        "$in": entities
+                    }
+                }
+            }
+        }, {
+            "year": 1,
+            "entities": {
+                "$elemMatch": {
+                    "entity": {
+                        "$in": entities
+                    }
+                }
+            }
+        })
+
+        return res
+
+    def get_document(self, document_id):
+        """
+        Returns the document associated with document_id
+        """
+        res = self.db_.documents.find_one({
+            "_id": ObjectId(document_id)
+        })
+
+        return res
 
     def get_author_name(self, author_id):
         """

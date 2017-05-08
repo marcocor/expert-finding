@@ -51,13 +51,12 @@ function issueQuery() {
 	$.getJSON(queryAPI, {
 		q: query
 	}).done(function (data) {
-		$('#results').show();
-		fillResults($("#results-list-cos-ef-iaf"), data["cossim_efiaf"], data["query_entities"]);
+		// fillResults($("#results-list-cos-ef-iaf"), data["cossim_efiaf"], data["query_entities"]);
 		fillResults($("#results-list-ef-iaf"), data["efiaf"], data["query_entities"]);
 		fillResults($("#results-list-ec-iaf"), data["eciaf"], data["query_entities"]);
 		fillResults($("#results-list-log-ec-ef-iaf"), data["log_ec_ef_iaf"], data["query_entities"]);
 		// fillResults($("#results-list-relatedness-geom"), data["relatedness_geom"], data["query_entities"]);
-		$("#time-cos-ef-iaf").text(data["time_cossim_efiaf"].toFixed(3) + " sec")
+		// $("#time-cos-ef-iaf").text(data["time_cossim_efiaf"].toFixed(3) + " sec")
 		$("#time-ef-iaf").text(data["time_efiaf"].toFixed(3) + " sec")
 		$("#time-ec-iaf").text(data["time_eciaf"].toFixed(3) + " sec")
 		$("#time-log-ec-ef-iaf").text(data["time_log_ec_ef_iaf"].toFixed(3) + " sec")
@@ -67,6 +66,7 @@ function issueQuery() {
 		alert("Query failed.")
 	}).always(function (data) {
 		$('#loader').hide();
+		$('.nav-tabs a[href="#tab-results"]').tab('show');
 	})
 }
 
@@ -79,13 +79,13 @@ function issueQueryLucene() {
 	$.getJSON(queryAPI, {
 		q: query
 	}).done(function (data) {
-		$('#lucene-results').show();
 		fillResultsLucene($("#results-list-lucene-max"), data["lucene_max"]);
 		fillResultsLucene($("#results-list-lucene-mean"), data["lucene_mean"]);
 	}).fail(function (data) {
 		alert("Query failed.")
 	}).always(function (data) {
 		$('#loader').hide();
+		$('.nav-tabs a[href="#tab-lucene-results"]').tab('show');
 	})
 }
 

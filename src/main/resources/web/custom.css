@@ -7,9 +7,6 @@ body {
 }
 
 .form-search {
-￼    max-width: 330px;
-￼    padding: 15px;
-￼    margin: 0 auto;
 }
 
 #search-button {
@@ -17,11 +14,9 @@ body {
 }
 
 #results {
-    display: none;
 }
 
 #lucene-results {
-    display: none;
 }
 
 #loader {
@@ -46,4 +41,8 @@ body {
 
 .highlight-annotation {
 	background-color: lime;
+}
+
+.larger-modal-dialog {
+    width: 800px
 }

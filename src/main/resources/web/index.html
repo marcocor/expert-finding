@@ -73,93 +73,103 @@
 				</div>
 			</div>
 		</div>
-		<div id="results">
-			<div class="row">
-				<div class="col-md-offset-1 col-md-10">
-					<h3>Query entities</h3>
-					<div id="query-entities"></div>
+		<ul class="nav nav-tabs" role="tablist">
+			<li><a href="#tab-results" role="tab" data-toggle="tab">Results</a></li>
+			<li><a href="#tab-lucene-results" role="tab" data-toggle="tab">Lucene results</a></li>
+		</ul>
+		<div class="tab-content">
+			<div class="tab-pane" id="tab-results">
+				<div id="results">
+					<div class="row">
+						<div class="col-md-offset-1 col-md-10">
+							<h3>Query entities</h3>
+							<div id="query-entities"></div>
+						</div>
+					</div>
+					<div class="row">
+						<div class="col-md-3">
+							<div class="row">
+								<div class="col-md-8">
+									<h3>Cos ef*iaf</h3>
+								</div>
+								<div class="col-md-4 time" id="time-cos-ef-iaf"></div>
+							</div>
+							<ul class="list-group" id="results-list-cos-ef-iaf">
+							</ul>
+						</div>
+						<div class="col-md-3">
+							<div class="row">
+								<div class="col-md-8">
+									<h3>Pure ef*iaf</h3>
+								</div>
+								<div class="col-md-4 time" id="time-ef-iaf"></div>
+							</div>
+							<ul class="list-group" id="results-list-ef-iaf">
+							</ul>
+						</div>
+						<div class="col-md-3">
+							<div class="row">
+								<div class="col-md-8">
+									<h3>Pure ec*iaf</h3>
+								</div>
+								<div class="col-md-4 time" id="time-ec-iaf"></div>
+							</div>
+							<ul class="list-group" id="results-list-ec-iaf">
+							</ul>
+						</div>
+						<div class="col-md-3">
+							<div class="row">
+								<div class="col-md-8">
+									<h3>(log(ec)+ef)*iaf</h3>
+								</div>
+								<div class="col-md-4 time" id="time-log-ec-ef-iaf"></div>
+							</div>
+							<ul class="list-group" id="results-list-log-ec-ef-iaf">
+							</ul>
+						</div>
+						<div style="display: none" class="col-md-2">
+							<div class="row">
+								<div class="col-md-8">
+									<h3>relatedness</h3>
+								</div>
+								<div class="col-md-4 time" id="time-relatedness-geom"></div>
+							</div>
+							<ul class="list-group" id="results-list-relatedness-geom">
+							</ul>
+						</div>
+					</div>
 				</div>
 			</div>
-			<div class="row">
-				<div class="col-md-3">
+			<div class="tab-pane" id="tab-lucene-results">
+				<div id="lucene-results">
 					<div class="row">
-						<div class="col-md-8">
-							<h3>Cos ef*iaf</h3>
+						<div class="col-md-3">
+							<div class="row">
+								<div class="col-md-8">
+									<h3>Lucene max</h3>
+								</div>
+								<div class="col-md-4 time" id="time-lucene-max"></div>
+							</div>
+							<ul class="list-group" id="results-list-lucene-max">
+							</ul>
 						</div>
-						<div class="col-md-4 time" id="time-cos-ef-iaf"></div>
-					</div>
-					<ul class="list-group" id="results-list-cos-ef-iaf">
-					</ul>
-				</div>
-				<div class="col-md-3">
-					<div class="row">
-						<div class="col-md-8">
-							<h3>Pure ef*iaf</h3>
+						<div class="col-md-3">
+							<div class="row">
+								<div class="col-md-8">
+									<h3>Lucene mean</h3>
+								</div>
+								<div class="col-md-4 time" id="time-lucene-mean"></div>
+							</div>
+							<ul class="list-group" id="results-list-lucene-mean">
+							</ul>
 						</div>
-						<div class="col-md-4 time" id="time-ef-iaf"></div>
 					</div>
-					<ul class="list-group" id="results-list-ef-iaf">
-					</ul>
-				</div>
-				<div class="col-md-3">
-					<div class="row">
-						<div class="col-md-8">
-							<h3>Pure ec*iaf</h3>
-						</div>
-						<div class="col-md-4 time" id="time-ec-iaf"></div>
-					</div>
-					<ul class="list-group" id="results-list-ec-iaf">
-					</ul>
-				</div>
-				<div class="col-md-3">
-					<div class="row">
-						<div class="col-md-8">
-							<h3>(log(ec)+ef)*iaf</h3>
-						</div>
-						<div class="col-md-4 time" id="time-log-ec-ef-iaf"></div>
-					</div>
-					<ul class="list-group" id="results-list-log-ec-ef-iaf">
-					</ul>
-				</div>
-				<div style="display: none" class="col-md-2">
-					<div class="row">
-						<div class="col-md-8">
-							<h3>relatedness</h3>
-						</div>
-						<div class="col-md-4 time" id="time-relatedness-geom"></div>
-					</div>
-					<ul class="list-group" id="results-list-relatedness-geom">
-					</ul>
-				</div>
-			</div>
-		</div>
-		<div id="lucene-results">
-			<div class="row">
-				<div class="col-md-3">
-					<div class="row">
-						<div class="col-md-8">
-							<h3>Lucene max</h3>
-						</div>
-						<div class="col-md-4 time" id="time-lucene-max"></div>
-					</div>
-					<ul class="list-group" id="results-list-lucene-max">
-					</ul>
-				</div>
-				<div class="col-md-3">
-					<div class="row">
-						<div class="col-md-8">
-							<h3>Lucene mean</h3>
-						</div>
-						<div class="col-md-4 time" id="time-lucene-mean"></div>
-					</div>
-					<ul class="list-group" id="results-list-lucene-mean">
-					</ul>
 				</div>
 			</div>
 		</div>
 	</div>
 	<div id="annotations-modal" class="modal fade" role="dialog">
-		<div class="modal-dialog">
+		<div class="modal-dialog larger-modal-dialog">
 			<div class="modal-content">
 				<div class="modal-header">
 					<button type="button" class="close" data-dismiss="modal">&times;</button>
@@ -174,10 +184,10 @@
 						</div>
 					</div>
 					<div class="row">
-						<div class="col-md-3">
+						<div class="col-md-4">
 							<ul id="annotations-modal-doc-list" class="list-group"></ul>
 						</div>
-						<div class="col-md-9">
+						<div class="col-md-8">
 							<div id="annotations-modal-doc-body"></div>
 						</div>
 					</div>
