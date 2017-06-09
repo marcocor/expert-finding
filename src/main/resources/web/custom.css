@@ -1,9 +1,30 @@
 body {
-  padding-top: 50px;
+    padding-top: 50px;
+    overflow-y: scroll; 
 }
 .main {
-  padding: 30px 15px 10px 15px;
-  text-align: center;
+    padding: 30px 15px 10px 15px;
+    text-align: center;
+}
+
+.margin-bottom {
+    margin-bottom: 15px;
+}
+
+.tab-about-content {
+    display: flex;
+    align-items: center;
+    align-content: center;
+    justify-content: center;
+    flex-direction: column;
+}
+
+.about {
+    width: 70%;
+    padding: 30px 15px 10px 15px;
+    text-align: center;
+    font-size: 15px;
+    font-weight: 400;
 }
 
 .form-search {
@@ -44,5 +65,5 @@ body {
 }
 
 .larger-modal-dialog {
-    width: 800px
+    width: 800px !important;
 }
