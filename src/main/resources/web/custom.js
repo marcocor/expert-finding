@@ -81,6 +81,8 @@ function issueQueryLucene() {
 	}).done(function (data) {
 		fillResultsLucene($("#results-list-lucene-max"), data["lucene_max"]);
 		fillResultsLucene($("#results-list-lucene-mean"), data["lucene_mean"]);
+		$("#time-lucene-max").text(data["time_lucene_max"].toFixed(3) + " sec")
+		$("#time-lucene-mean").text(data["time_lucene_mean"].toFixed(3) + " sec")
 	}).fail(function (data) {
 		alert("Query failed.")
 	}).always(function (data) {
