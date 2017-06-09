@@ -112,11 +112,11 @@ class DataLayer():
     def _add_entities(self, author, document_id, document, annotations):
         document_entities = self._get_document_entities(annotations)
 
-        self._add_entities_to_author(author, document_entities)
+        self._add_entities_to_author(author, document, document_entities)
         self._add_entities_to_collection(
             author, document_id, document, document_entities)
 
-    def _add_entities_to_author(self, author, document_entities):
+    def _add_entities_to_author(self, author, document, document_entities):
         author_entities = author['entities']
 
         found = False
@@ -127,13 +127,15 @@ class DataLayer():
                     entity['score'] = max(
                         document_entities[entity_name]['score'], entity['score'])
                     entity['document_count'] += 1
+                    entity['years'].append(document.year)
                     found = True
 
             if not found:
                 author_entities.append({
                     'entity_name': entity_name,
                     'score': document_entities[entity_name]['score'],
-                    'document_count': 1
+                    'document_count': 1,
+                    'years': [document.year]
                 })
 
             found = False
@@ -144,17 +146,18 @@ class DataLayer():
             entity = self.db_.entities.find_one({'entity_name': entity_name})
 
             if entity is None:
+                # if the entity is not yet present in the collection,
+                # it is added (including information on the usage by author)
                 entity = {
                     'entity_name': entity_name,
                     'institutions': [document.institution],
                     'occurrences': [{
                         'author_id': author['author_id'],
                         'count': document_entities[entity_name]['count'],
-                        'score': document_entities[entity_name]['score']
+                        'score': document_entities[entity_name]['score'],
+                        'years': [document.year]
                     }],
-                    'documents': [
-                        document_id
-                    ]
+                    'documents': [document_id]
                 }
             else:
                 entity['institutions'].append(document.institution)
@@ -168,14 +171,16 @@ class DataLayer():
                             document_entities[entity_name]['score'],
                             author_occurrence['score']
                         )
-
+                        author_occurrence['years'].append(document.year)
+                        author_occurrence['years'] = list(set(author_occurrence['years']))
                         found = True
                         break
                 if not found:
                     entity['occurrences'].append({
                         'author_id': author['author_id'],
                         'count': 1,
-                        'score': document_entities[entity_name]['score']
+                        'score': document_entities[entity_name]['score'],
+                        'years': [document.year]
                     })
 
             self.db_.entities.find_one_and_replace(
@@ -260,6 +265,10 @@ class DataLayer():
         author = self.db_.authors.find_one(
             {"author_id": author_id}, {'name': True})
         return author['name']
+        
+    def complete_author_name(self, author_name):
+        res = self.db_.authors.find({"name" : { "$regex": ".*{}.*".format(author_name), "$options": "i"} })
+        return res
 
     def get_author_papers_count(self, author_id):
         """
@@ -304,14 +313,12 @@ class DataLayer():
         }, {
             '$unwind': '$entities'
         }, {
-            '$group': {
-                '_id': '$entities.entity_name',
-                'document_count': {
-                    '$sum': '$entities.document_count'
-                },
-                'max_rho': {
-                    '$max': '$entities.score'
-                }
+            '$project': {
+                '_id': None,
+                'entity_name': '$entities.entity_name',
+                'document_count': '$entities.document_count',
+                'years': '$entities.years',
+                'max_rho': '$entities.score'
             }
         }])
 
