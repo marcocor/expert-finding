@@ -34,7 +34,10 @@ def legit_document(doc_body):
 
 
 def entities(text):
-    return tagme.annotate(text).annotations if text else []
+    if text:
+        return [annotation for annotation in tagme.annotate(text).annotations if annotation.entity_title is not None] 
+    else:
+        return []
 
 
 def set_cache(cache_dir):
@@ -50,6 +53,9 @@ def weighted_geom_mean(vals_weights):
 
 def _str_titles(t1, t2):
     return unicode(sorted([t1, t2])).encode("utf-8")
+
+def lucene_escape(query):
+    return query.replace("(","").replace(")","").replace("*","")
 
 Author = namedtuple('Author', ['author_id', 'name', 'institution'])
 class ExpertFindingBuilder(object):
@@ -88,8 +94,8 @@ class ExpertFindingBuilder(object):
         except Exception:
             logging.warn("Lucene is disabled")
 
-
 class ExpertFinding(object):
+    QUERY_SCORE_THRESHOLD = 0.20
 
     def __init__(self, storage_db, database_name, lucene_dir=None, erase=False, relatedness_dict_file=None):
         self.data_layer = data_layer.DataLayer(self, entities_fun=entities, storage_db=storage_db, database_name=database_name, erase=erase)        
@@ -100,10 +106,12 @@ class ExpertFinding(object):
             logging.info("Lucene index directory: %s", lucene_dir)
             index_dir = lucene.SimpleFSDirectory(lucene.File(lucene_dir))
             self.analyzer = lucene.ClassicAnalyzer(lucene.Version.LUCENE_35)
-            self.index_writer = lucene.IndexWriter(index_dir, self.analyzer, True, lucene.IndexWriter.MaxFieldLength.UNLIMITED)
-            if not erase:
+            if erase:
+                self.index_writer = lucene.IndexWriter(index_dir, self.analyzer, True, lucene.IndexWriter.MaxFieldLength.UNLIMITED)
+            else:
                 self.index_searcher = lucene.IndexSearcher(index_dir)
-        except Exception:
+        except Exception as e:
+            logging.error(e)
             logging.warn("Lucene disabled")
 
     def builder(self):
@@ -138,7 +146,7 @@ class ExpertFinding(object):
         """
         total_papers = self.data_layer.total_papers()
         author_entity_frequency = self.author_entity_frequency_and_popularity(author_id)
-        author_papers = self.author_papers_count(author_id)
+        author_papers = self.data_layer.get_author_papers_count(author_id)
         return sorted(((
                  entity,
                  entity_author_freq / float(author_papers),
@@ -218,11 +226,11 @@ class ExpertFinding(object):
             print "{} authors have {}-{} documents with abstract".format(sum(1 for c in papers_count if begin <= c <= end), begin, end)
 
 
-    def authors_completion(self, terms):
+    def authors_completion(self, author_name):
         """
         Returns author names autocompletion for terms.
         """
-        return self.db.execute(u'''SELECT * FROM "authors" WHERE name LIKE ? LIMIT 50''', (u"%{}%".format(terms),)).fetchall()
+        return self.data_layer.complete_author_name(author_name)
 
     def _prefetch_relatedness(self, entity_group_1, entity_group_2):
         pairs = ((e1, e2) for e1 in entity_group_1 for e2 in entity_group_2)
@@ -235,7 +243,7 @@ class ExpertFinding(object):
         self.rel_dict.commit()
 
     def relatedness_geom(self, query_entities, author_id):
-        e_a_f = self.author_entity_frequency(author_id)
+        e_a_f = self.data_layer.author_entity_frequency(author_id)
         author_entity_to_ec = dict((t[0], t[1]) for t in e_a_f)
         author_entity_to_maxrho = dict((t[0], t[3]) for t in e_a_f)
         
@@ -251,11 +259,23 @@ class ExpertFinding(object):
 
         return mean([clip(1 - weighted_geom_mean(relatedness_weights[q_entity]) + alpha, 0.0, 1.0) ** (1.0/x) for q_entity in relatedness_weights])
 
+    def find_expert(self, input_query, scoring_functions=[]):
+        entities_scoring_f = [scoring_f for scoring_f in scoring_functions if scoring_f in scoring.ENTITIES_SCORING_FUNCTIONS]
+        lucene_scoring_f = [scoring_f for scoring_f in scoring_functions if scoring_f in scoring.LUCENE_SCORING_FUNCTIONS]
+        entities_results = self.find_expert_entities(input_query, entities_scoring_f)
+        lucene_results = self.find_expert_lucene(input_query, lucene_scoring_f)
+        return dict(entities_results.items() + lucene_results.items())
 
-    def find_expert(self, input_query, scoring_functions=scoring.ENTITIES_SCORING_FUNCTIONS):
+    def find_expert_entities(self, input_query, scoring_functions):
+        if len(scoring_functions) == 0:
+            return {}
+
         logging.debug(u"Processing query: {}".format(input_query))
         start_time = time.time()
-        query_entities =  list(set(a.entity_title for a in entities(input_query)))
+        query_entities =  list(set(a.entity_title for a in entities(input_query) if a.score >= self.QUERY_SCORE_THRESHOLD))
+        if len(query_entities) == 0:
+            query_entities = list(set(a.entity_title for a in entities(input_query)))
+
         logging.debug(u"Found the following entities in the query: {}".format(u",".join(query_entities)))
         authors = self.data_layer.citing_authors(query_entities) 
         logging.debug(u"Found %d authors that matched the query, computing score for each of them." % len(authors))
@@ -272,10 +292,13 @@ class ExpertFinding(object):
         results["query_entities"] = list(query_entities)
         return results
 
-    def find_expert_lucene(self, input_query, scoring_functions=scoring.LUCENE_SCORING_FUNCTIONS):
+    def find_expert_lucene(self, input_query, scoring_functions):
+        if len(scoring_functions) == 0:
+            return {}
+
         logging.debug(u"Processing Lucene query: {}".format(input_query))
         start_time = time.time()
-        query = lucene.QueryParser(lucene.Version.LUCENE_35, "text", self.analyzer).parse(input_query)
+        query = lucene.QueryParser(lucene.Version.LUCENE_35, "text", self.analyzer).parse(lucene_escape(input_query))
         hits = self.index_searcher.search(query, 40)
         query_result = {}
 
@@ -288,9 +311,14 @@ class ExpertFinding(object):
             author_score['docs'][document_id] = {'year':doc.get('year')}
             author_score['scores'][document_id] = doc_score
             query_result[author_id] = author_score
-        
+
         results = {}
         for scoring_f in scoring_functions:
-            results[scoring_f.func_name.replace("_score", "")] = scoring_f(query_result)
-        
+            start_time = time.time()
+            scoring_f_name = scoring_f.__name__.replace("_score", "")
+            results[scoring_f_name] = scoring_f(query_result)
+            runtime = time.time() - start_time
+            results["time_" + scoring_f_name] = runtime
+            logging.info("Query completed in %.3f sec", runtime)
+
         return results
