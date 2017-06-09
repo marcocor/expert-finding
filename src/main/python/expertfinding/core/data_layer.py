@@ -426,6 +426,26 @@ class DataLayer():
 
         return res
 
+
+    def get_author_max_rho(self, author_id, entities):
+        """
+        Retrieves max rho associated to each entity for the given author
+        """
+        entity_to_max_rho = {}
+        res = self.db_.authors.find_one({
+            "author_id": author_id
+        })
+
+        if not res:
+            logging.error("Cannot find author %s", author_id)
+            return entity_to_max_rho
+
+        for entity in res["entities"]:
+            if entity["entity_name"] in entities:
+                entity_to_max_rho[entity["entity_name"]] = entity["score"]
+
+        return entity_to_max_rho
+
     def total_papers(self):
         """
         Returns #documents indexed

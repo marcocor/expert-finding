@@ -40,26 +40,25 @@ def get_documents():
     docid_to_entities = dict()
 
     docs = exf.data_layer.get_document_containing_entities(author_id, entities)
-
+    entity_to_max_rho = exf.data_layer.get_author_max_rho(author_id, entities)
     for doc in docs:
         document_id = str(doc['_id'])
         docid_to_year[document_id] = doc['year']
         docid_to_entities[document_id] = [{"entity": entity['entity'], "count": entity['count']} for entity in doc['entities']]
 
-    return jsonify(dict((docid, {
-                                    "year": docid_to_year[docid],
-                                    "entities": docid_to_entities[docid]
-                               }
-                       ) 
-                       for docid in docid_to_year
-                      )
-                 )
+    return jsonify({
+        "entity_to_max_rho": entity_to_max_rho,
+        "docid_to_entities": dict((docid, {
+            "year": docid_to_year[docid],
+            "entities": docid_to_entities[docid]
+            }) for docid in docid_to_year)
+    })
 
 @app.route('/query')
 def find_expert():
     global exf
     input_query = request.args.get('q')
-    results = exf.find_expert(input_query=input_query)
+    results = exf.find_expert(input_query=input_query, scoring_functions=scoring.ENTITIES_SCORING_FUNCTIONS)
 
     return jsonify(results)
 
@@ -67,36 +66,40 @@ def find_expert():
 def find_expert_lucene():
     global exf
     input_query = request.args.get('q')
-    results = exf.find_expert_lucene(input_query=input_query)
-    
+    results = exf.find_expert(input_query=input_query, scoring_functions=scoring.LUCENE_SCORING_FUNCTIONS)
+
     return jsonify(results)
 
 
 @app.route('/completion')
 def complete_name():
     global exf
-    query = re.sub(r"[%\s]+", "%", request.args.get('q'))
-    return jsonify(authors=[{"id": author_id,
-                             "name": name,
-                             "institution": institution,
+    query = request.args.get('q')
+    return jsonify(authors=[{"id": author["author_id"],
+                             "name": author["name"],
+                             "institution": author["institution"],
                             }
-                            for author_id, name, institution in exf.authors_completion(query)])
+                            for author in exf.authors_completion(query)])
 
 @app.route('/author')
 def author_info():
     global exf
     author_id = request.args.get('id')
-    entity_freq = [{"entity": entity,
-      "frequency": author_freq,
-      "years": sorted(Counter([int(y) for y in years.split(",")]).items())
-      } for entity, author_freq, years, _ in exf.data_layer.author_entity_frequency(author_id)]
-    
+    entity_freq = []
+    for e in exf.data_layer.author_entity_frequency(author_id):
+        entity_freq.append({
+            "entity": e["entity_name"],
+            "max_rho": e["max_rho"],
+            "frequency": e["document_count"],
+            "years": sorted(Counter(e["years"]).items())
+        })
+
     entity_freq.sort(key=lambda e: e["frequency"], reverse=True)
-    
+
     return jsonify(
         id=author_id,
         name=exf.data_layer.get_author_name(author_id),
-        papers_count=exf.author_papers_count(author_id),
+        papers_count=exf.data_layer.get_author_papers_count(author_id),
         entities=entity_freq,
     )
 

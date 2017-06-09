@@ -123,14 +123,12 @@ function refreshModalDocument() {
 	})
 }
 
-function appendDocument(data, lucene) {
+function appendDocuments(data) {
 	$.each(data, function (docid, docdata) {
 		tbody = $("<tbody>")
-		if (!lucene) {
-			$.each(docdata["entities"], function (i, e) {
-				tbody.append($("<tr>").append($("<td>").text(e["entity"])).append($("<td>").text(e["count"])))
-			})
-		}
+		$.each(docdata["entities"], function (i, e) {
+			tbody.append($("<tr>").append($("<td>").text(e["entity"])).append($("<td>").text(e["count"])))
+		})
 
 		table = $("<table>").attr("class", "table").append($("<thead><tr><th>Entity</th><th>Occ.</th></tr></thead>")).append(
 			tbody)
@@ -158,7 +156,8 @@ function updateAndShowDocumentModal(author_id, author_name, query_entities) {
 		"a": author_id,
 		"e": JSON.stringify(query_entities)
 	}).done(function (data) {
-		appendDocument(data)
+		appendDocuments(data.docid_to_entities);
+		appendMaxRho(data.entity_to_max_rho);
 	}).fail(function (data) {
 		alert("Author documents request failed.")
 	})
@@ -170,7 +169,7 @@ function updateAndShowDocumentModalLucene(author_id, author_name, docs) {
 	$("#annotations-modal-author-name").text(author_name + " (id " + author_id + ")")
 	$("#annotations-modal-doc-body").empty()
 	$("#annotations-modal-doc-list").empty()
-	appendDocument(docs)
+	appendDocuments(docs)
 	$("#annotations-modal").modal()
 }
 
@@ -244,11 +243,23 @@ function fillQueryEntities(div, query_entities) {
 		div.append($('<span>').addClass("label").addClass("label-default").text(e));
 	});
 
-	$("#annotations-modal-entity-buttons").empty()
+	$("#annotations-modal-entity-buttons-entities").empty()
+	$("#annotations-modal-entity-scores").empty()
 	$.each(query_entities, function (i, e) {
-		$("#annotations-modal-entity-buttons").append(
-			$("<button>").attr("type", "button").attr("entity", e).addClass("active").attr("aria-pressed", "true").addClass("btn")
-				.addClass("btn-default").addClass("entity-button").text(e).click(refreshModalAnnotations))
+		$("#annotations-modal-entity-buttons-entities").append(
+			$("<th>").append($("<button>").attr("type", "button").attr("entity", e).addClass("active").attr("aria-pressed", "true").addClass("btn")
+				.addClass("btn-default").addClass("entity-button").text(e).click(refreshModalAnnotations)));
+		$("#annotations-modal-entity-scores-entities").append(
+			$("<th>").append($("<div>").attr("class","annotations-modal-entity-score").attr("entity", e).text("-"))
+		);
 	})
 
+}
+
+/** Append max rho associated to authors in the modal visualization */
+function appendMaxRho(entityToMaxRho) {
+	$(".annotations-modal-entity-score").text("-");
+	$.each(entityToMaxRho, (entityName, maxRho) => {
+		$(`.annotations-modal-entity-score[entity="${entityName}"]`).text(maxRho.toFixed(3));
+	})
 }

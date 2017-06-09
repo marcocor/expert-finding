@@ -67,3 +67,7 @@ body {
 .larger-modal-dialog {
     width: 800px !important;
 }
+
+.annotations-modal-entity-score {
+    text-align: center;
+}
