@@ -244,7 +244,7 @@ function fillQueryEntities(div, query_entities) {
 	});
 
 	$("#annotations-modal-entity-buttons-entities").empty()
-	$("#annotations-modal-entity-scores").empty()
+	$("#annotations-modal-entity-scores-entities").empty()
 	$.each(query_entities, function (i, e) {
 		$("#annotations-modal-entity-buttons-entities").append(
 			$("<th>").append($("<button>").attr("type", "button").attr("entity", e).addClass("active").attr("aria-pressed", "true").addClass("btn")
