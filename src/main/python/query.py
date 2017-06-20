@@ -5,10 +5,12 @@ from __future__ import division
 
 from argparse import ArgumentParser
 import logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 import sys
 from expertfinding.core import ExpertFinding, scoring
 import tagme
+
+SCORING_FUNCTION = scoring.lucene_max_eciaf_norm_score
 
 def main():
     '''Command line options.'''
@@ -24,8 +26,9 @@ def main():
 
     while True:
         query = raw_input("Query:")
-        res = exf.find_expert(input_query=query, scoring_functions=[scoring.eciaf_score])
-        for result in res['eciaf']:
+        res = exf.find_expert(input_query=query, scoring_functions=[SCORING_FUNCTION])
+        scoring_f_name = SCORING_FUNCTION.__name__.replace("_score", "")
+        for result in res[scoring_f_name]:
             logging.info("{} ({}) score={:.3f}".format(result["name"], result["author_id"], result["score"]))
     return 0
 

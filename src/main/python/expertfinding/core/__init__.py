@@ -262,9 +262,11 @@ class ExpertFinding(object):
     def find_expert(self, input_query, scoring_functions=[]):
         entities_scoring_f = [scoring_f for scoring_f in scoring_functions if scoring_f in scoring.ENTITIES_SCORING_FUNCTIONS]
         lucene_scoring_f = [scoring_f for scoring_f in scoring_functions if scoring_f in scoring.LUCENE_SCORING_FUNCTIONS]
+        mix_scoring_f = [scoring_f for scoring_f in scoring_functions if scoring_f in scoring.MIX_SCORING_FUNCTIONS]
         entities_results = self.find_expert_entities(input_query, entities_scoring_f)
         lucene_results = self.find_expert_lucene(input_query, lucene_scoring_f)
-        return dict(entities_results.items() + lucene_results.items())
+        mix_results = self.find_expert_mix(input_query, mix_scoring_f)
+        return dict(entities_results.items() + lucene_results.items() + mix_results.items())
 
     def find_expert_entities(self, input_query, scoring_functions):
         if len(scoring_functions) == 0:
@@ -297,7 +299,6 @@ class ExpertFinding(object):
             return {}
 
         logging.debug(u"Processing Lucene query: {}".format(input_query))
-        start_time = time.time()
         query = lucene.QueryParser(lucene.Version.LUCENE_35, "text", self.analyzer).parse(lucene_escape(input_query))
         hits = self.index_searcher.search(query, 40)
         query_result = {}
@@ -317,6 +318,26 @@ class ExpertFinding(object):
             start_time = time.time()
             scoring_f_name = scoring_f.__name__.replace("_score", "")
             results[scoring_f_name] = scoring_f(query_result)
+            runtime = time.time() - start_time
+            results["time_" + scoring_f_name] = runtime
+            logging.info("Query completed in %.3f sec", runtime)
+
+        return results
+
+
+    def find_expert_mix(self, input_query, scoring_functions):
+        if len(scoring_functions) == 0:
+            return {}
+
+        results = {}
+        for scoring_f in scoring_functions:
+            start_time = time.time()
+            entities_results = self.find_expert_entities(input_query, [scoring_f.ENTITIES_SCORING_FUNCTION])
+            lucene_results = self.find_expert_lucene(input_query, [scoring_f.LUCENE_SCORING_FUNCTION])
+            scoring_f_name = scoring_f.__name__.replace("_score", "")
+            lucene_scoring_f_name = scoring_f.LUCENE_SCORING_FUNCTION.__name__.replace("_score", "")
+            entities_scoring_f_name = scoring_f.ENTITIES_SCORING_FUNCTION.__name__.replace("_score", "")
+            results[scoring_f_name] = scoring_f(entities_results[entities_scoring_f_name], lucene_results[lucene_scoring_f_name])
             runtime = time.time() - start_time
             results["time_" + scoring_f_name] = runtime
             logging.info("Query completed in %.3f sec", runtime)

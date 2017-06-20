@@ -5,6 +5,7 @@ import signal
 import sys
 import codecs
 import logging
+import time
 from argparse import ArgumentParser
 from multiprocessing import Pool
 from random import random
@@ -28,6 +29,8 @@ SCORING_FUNCTIONS = {foo.__name__: foo
                          #scoring.relatedness_geom,
                          scoring.lucene_max_score,
                          scoring.lucene_mean_score,
+                         scoring.lucene_max_eciaf_score,
+                         scoring.lucene_max_eciaf_norm_score,
                          random_score,
                          ]
                     }
@@ -43,9 +46,7 @@ def ef_processor(data):
     global exf, scoring_foo
     scoring_name = scoring_foo.__name__.replace("_score", "")
     query_id, query = data
-    logging.debug("Scoring function is %s: %s", scoring_name, scoring_foo)
     res = exf.find_expert(query, [scoring_foo])
-    logging.debug(res)
     hits, runtime = res[scoring_name], res["time_{}".format(scoring_name)]
     # Using Lucene as scoring function, query_entities is not defined
     query_entities = res.get("query_entities", [])
@@ -95,7 +96,8 @@ def main():
             pool.terminate()
             pool.join()
 
-        results_filename_base = "{}_{}".format(scoring_foo.func_name, os.path.split(args.qrels)[-1].replace(".qrel", ""))
+        dataset = os.path.split(args.qrels)[-1].replace(".qrel", "")
+        results_filename_base = os.path.join("scores/", "{}_{}_{}".format(scoring_foo.func_name, dataset[:3], time.strftime("%d-%m-%y")))
         results_filename = results_filename_base + ".results"
         runtime_filename = results_filename_base + ".runtime"
         query_entities_filename = results_filename_base + ".queryentities"
@@ -109,7 +111,6 @@ def main():
                 query_entities_f.write(u"{} {}\n".format(q_id, u"; ".join(query_entities)).encode("utf-8"))
 
         evaluation = check_output(["trec_eval", "-c", "-q", "-M", "1000", "-m", "all_trec", args.qrels, results_filename])
-        print evaluation
         with open(results_filename_base + ".eval", "w") as eval_f:
             eval_f.write(evaluation)
 
