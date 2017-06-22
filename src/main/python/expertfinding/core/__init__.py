@@ -27,8 +27,6 @@ from expertfinding.core import data_layer, scoring
 
 __all__ = []
 
-DEFAULT_MIN_SCORE = 0.20
-
 def legit_document(doc_body):
     return doc_body is not None and len(doc_body) > 10
 
@@ -44,9 +42,6 @@ def set_cache(cache_dir):
     cache = pyfscache.FSCache(cache_dir)
     expertfinding.core.entities = cache(expertfinding.core.entities)
 
-
-def join_entities_sql(entities):
-    return u", ".join(u"'{}'".format(t.replace("'", "''")) for t in entities)
 
 def weighted_geom_mean(vals_weights):
     return exp(sum(w * log(v) for v, w in vals_weights) / sum(w for _, w in vals_weights))
@@ -73,15 +68,13 @@ class ExpertFindingBuilder(object):
 
         logging.info("%s: Number of papers (filtered) %d" % (os.path.basename(input_f), len(papers)))
 
-
         if papers:
             logging.info("%s: Number of papers (filtered) with abstract: %d" % (os.path.basename(input_f), sum(1 for p in papers if legit_document(p.abstract))))
             logging.info("%s: Number of papers (filtered) with DOI but no abstract %d" % (os.path.basename(input_f), sum(1 for p in papers if not legit_document(p.abstract) and p.doi)))
 
-
         papers.sort(key=lambda p: p.author_id)
         logging.debug("Papers sorted by author id")
-        author_to_papers = groupby(papers, lambda p: Author(p.author_id, p.name, p.institution))
+        author_to_papers = groupby(papers, lambda p: Author(p.author_id, p.name, p.institution)._asdict())
         logging.debug("Papers grouped by author_id")
 
         for author, papers_from_author in author_to_papers:
@@ -117,21 +110,21 @@ class ExpertFinding(object):
     def builder(self):
         return ExpertFindingBuilder(self)
 
-    def author_entity_frequency_and_popularity(self, author_id):
-        """
-        Returns how many authors's papers have cited the entities cited by a specific author.
-        """
-        return self.db.execute(u'''
-            SELECT e.entity, author_freq, SUM(e.frequency) AS entity_popularity,  years, max_rho
-            FROM entities AS e,
-            (
-                SELECT entity, COUNT(DISTINCT(document_id)) as author_freq, GROUP_CONCAT(year) as years, MAX(rho) AS max_rho
-                FROM entity_occurrences
-                WHERE author_id == ? AND rho > ?
-                GROUP BY entity
-            ) as d_e
-            WHERE d_e.entity == e.entity GROUP BY e.entity
-            ''', (author_id, DEFAULT_MIN_SCORE)).fetchall()
+    # def author_entity_frequency_and_popularity(self, author_id):
+    #     """
+    #     Returns how many authors's papers have cited the entities cited by a specific author.
+    #     """
+    #     return self.db.execute(u'''
+    #         SELECT e.entity, author_freq, SUM(e.frequency) AS entity_popularity,  years, max_rho
+    #         FROM entities AS e,
+    #         (
+    #             SELECT entity, COUNT(DISTINCT(document_id)) as author_freq, GROUP_CONCAT(year) as years, MAX(rho) AS max_rho
+    #             FROM entity_occurrences
+    #             WHERE author_id == ? AND rho > ?
+    #             GROUP BY entity
+    #         ) as d_e
+    #         WHERE d_e.entity == e.entity GROUP BY e.entity
+    #         ''', (author_id, DEFAULT_MIN_SCORE)).fetchall()
 
 
     def get_authors_count(self, institution):
@@ -208,14 +201,8 @@ class ExpertFinding(object):
            {}
            ORDER BY year, COUNT(*) DESC'''.format(having), author_id).fetchall()
 
-    def papers_count(self):
-        return self.db.execute(u'''
-            SELECT author_id, COUNT(DISTINCT(document_id))
-            FROM "entity_occurrences"
-            GROUP BY author_id''').fetchall()
-
     def print_documents_quantiles(self):
-        papers_count = zip(*self.papers_count())[1]
+        papers_count = zip(*self.data_layer.total_papers())[1]
         print "number of documents: {}".format(sum(papers_count))
         print "number of authors: {}".format(len(papers_count))
         quantiles = stats.mstats.mquantiles(papers_count, prob=[n / 10.0 for n in range(10)])
@@ -337,7 +324,7 @@ class ExpertFinding(object):
             scoring_f_name = scoring_f.__name__.replace("_score", "")
             lucene_scoring_f_name = scoring_f.LUCENE_SCORING_FUNCTION.__name__.replace("_score", "")
             entities_scoring_f_name = scoring_f.ENTITIES_SCORING_FUNCTION.__name__.replace("_score", "")
-            results[scoring_f_name] = scoring_f(entities_results[entities_scoring_f_name], lucene_results[lucene_scoring_f_name])
+            results[scoring_f_name] = scoring_f(entities_results[entities_scoring_f_name], lucene_results[lucene_scoring_f_name], input_query)
             runtime = time.time() - start_time
             results["time_" + scoring_f_name] = runtime
             logging.info("Query completed in %.3f sec", runtime)

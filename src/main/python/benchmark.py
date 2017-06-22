@@ -11,7 +11,7 @@ from multiprocessing import Pool
 from random import random
 from subprocess import check_output
 import tagme
-
+import errno
 
 from expertfinding.core import ExpertFinding, scoring
 
@@ -66,6 +66,30 @@ def qrels_generator(filename):
             topic_id, _, author_id, rank = line.strip().split("\t")
             yield topic_id, author_id, rank
 
+def write_results(results, scoring_foo, dataset, qrels):
+    results_filename_base = os.path.join("scores/{}_{}_{}/".format(scoring_foo.func_name, dataset[:3], time.strftime("%d_%m_%y")), "output")
+    if not os.path.exists(os.path.dirname(results_filename_base)):
+            try:
+                os.makedirs(os.path.dirname(results_filename_base))
+            except OSError as exc: # Guard against race condition
+                if exc.errno != errno.EEXIST:
+                    raise
+
+    results_filename = results_filename_base + ".results"
+    runtime_filename = results_filename_base + ".runtime"
+    query_entities_filename = results_filename_base + ".queryentities"
+
+    with open(results_filename, "w") as results_f, open(runtime_filename, "w") as runtime_f, open(query_entities_filename, "w") as query_entities_f:
+        for q_id in results:
+            hits, runtime, query_entities = results[q_id]
+            for hit in hits:
+                results_f.write("{} 0 {} 0 {} {}\n".format(q_id, hit["author_id"], hit["score"], scoring_foo.func_name))
+            runtime_f.write("{} {}\n".format(q_id, runtime))
+            query_entities_f.write(u"{} {}\n".format(q_id, u"; ".join(query_entities)).encode("utf-8"))
+
+    evaluation = check_output(["trec_eval", "-c", "-q", "-M", "1000", "-m", "all_trec", qrels, results_filename])
+    with open(results_filename_base + ".eval", "w") as eval_f:
+        eval_f.write(evaluation)
 
 def main():
     parser = ArgumentParser()
@@ -88,32 +112,15 @@ def main():
     for scoring_foo in [SCORING_FUNCTIONS[scoring_f_name] for scoring_f_name in args.scoring]:
         pool = Pool(initializer=initialize_ef_processor, initargs=(args.storage_db, args.lucene_dir, args.database_name, scoring_foo, args.relatedness_dict))
         # initialize_ef_processor(args.storage_db, args.lucene_dir, args.database_name, scoring_foo, args.relatedness_dict)
-        # results = [ef_processor(query) for query in queries]
-            
+        # results = dict(ef_processor(query) for query in queries)
+
         try:
             results = dict(pool.map(ef_processor, queries))
         except KeyboardInterrupt:
             pool.terminate()
             pool.join()
-
         dataset = os.path.split(args.qrels)[-1].replace(".qrel", "")
-        results_filename_base = os.path.join("scores/", "{}_{}_{}".format(scoring_foo.func_name, dataset[:3], time.strftime("%d-%m-%y")))
-        results_filename = results_filename_base + ".results"
-        runtime_filename = results_filename_base + ".runtime"
-        query_entities_filename = results_filename_base + ".queryentities"
-
-        with open(results_filename, "w") as results_f, open(runtime_filename, "w") as runtime_f, open(query_entities_filename, "w") as query_entities_f:
-            for q_id in results:
-                hits, runtime, query_entities = results[q_id]
-                for hit in hits:
-                    results_f.write("{} 0 {} 0 {} {}\n".format(q_id, hit["author_id"], hit["score"], scoring_foo.func_name))
-                runtime_f.write("{} {}\n".format(q_id, runtime))
-                query_entities_f.write(u"{} {}\n".format(q_id, u"; ".join(query_entities)).encode("utf-8"))
-
-        evaluation = check_output(["trec_eval", "-c", "-q", "-M", "1000", "-m", "all_trec", args.qrels, results_filename])
-        with open(results_filename_base + ".eval", "w") as eval_f:
-            eval_f.write(evaluation)
-
+        write_results(results, scoring_foo, dataset, args.qrels)
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
