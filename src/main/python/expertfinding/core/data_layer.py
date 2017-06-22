@@ -5,10 +5,12 @@ import logging
 import pymongo
 from bson.objectid import ObjectId
 
+logger = logging.getLogger("EF_log")
+
 try:
     import lucene
 except ImportError:
-    logging.error("Cannot import Lucene")
+    logger.error("Cannot import Lucene")
 
 
 
@@ -68,7 +70,7 @@ class DataLayer():
         Indexes a list of documents/papers (papers) from the same author (described in author_info)
         """
 
-        logging.info(
+        logger.info(
             "Indexing documents from author [%s] (%s)", author_info["name"], author_info["author_id"])
 
         author = self._get_author(author_info)
@@ -437,7 +439,7 @@ class DataLayer():
         })
 
         if not res:
-            logging.error("Cannot find author %s", author_id)
+            logger.error("Cannot find author %s", author_id)
             return entity_to_max_rho
 
         for entity in res["entities"]:

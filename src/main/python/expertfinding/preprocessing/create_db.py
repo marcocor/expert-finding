@@ -15,7 +15,7 @@ It defines classes_and_methods
 from __future__ import division
 
 import logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.CRITICAL)
 
 from argparse import ArgumentParser
 from glob import glob
@@ -63,4 +63,5 @@ def main():
     return 0
 
 if __name__ == "__main__":
+    logging.getLogger("EF_log").setLevel(logging.DEBUG)
     sys.exit(main())

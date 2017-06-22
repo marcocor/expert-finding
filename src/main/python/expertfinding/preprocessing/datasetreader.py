@@ -4,7 +4,7 @@ import re
 import string
 
 import unicodecsv as csv 
-
+logger = logging.getLogger("EF_log")
 
 INPUT_ENCODING_UNIPI = "windows-1252"
 INPUT_ENCODING_TU = "utf-8"
@@ -21,7 +21,7 @@ def paper_generator_unipi(filename, encoding=INPUT_ENCODING_UNIPI):
     with open(filename, 'rb') as input_f:
         for i, l in enumerate(csv.reader(input_f, delimiter=';', encoding=encoding)):
             if len(l) != 20:
-                logging.debug("Discarding line %d %d %s" % (i, len(l), l))
+                logger.debug("Discarding line %d %d %s" % (i, len(l), l))
                 continue
             yield Paper(l[0], normalize_author(l[2], l[1]), l[4], int(l[6]), l[13], l[11])
 

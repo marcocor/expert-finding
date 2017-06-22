@@ -16,11 +16,12 @@ from numpy import clip, mean
 from scipy import stats
 from sqlitedict import SqliteDict
 
+logger = logging.getLogger("EF_log")
 
 try:
     import lucene
 except ImportError:
-    logging.error("Cannot import Lucene")
+    logger.error("Cannot import Lucene")
 
 import expertfinding
 from expertfinding.core import data_layer, scoring
@@ -61,21 +62,21 @@ class ExpertFindingBuilder(object):
 
     def add_documents(self, input_f, papers_generator, min_year=None, max_year=None):
         papers = list(papers_generator)
-        logging.info("%s: Number of papers (total): %d" % (os.path.basename(input_f), len(papers)))
+        logger.info("%s: Number of papers (total): %d" % (os.path.basename(input_f), len(papers)))
 
         papers = [p for p in papers if
                   (min_year is None or p.year >= min_year) and (max_year is None or p.year <= max_year)]
 
-        logging.info("%s: Number of papers (filtered) %d" % (os.path.basename(input_f), len(papers)))
+        logger.info("%s: Number of papers (filtered) %d" % (os.path.basename(input_f), len(papers)))
 
         if papers:
-            logging.info("%s: Number of papers (filtered) with abstract: %d" % (os.path.basename(input_f), sum(1 for p in papers if legit_document(p.abstract))))
-            logging.info("%s: Number of papers (filtered) with DOI but no abstract %d" % (os.path.basename(input_f), sum(1 for p in papers if not legit_document(p.abstract) and p.doi)))
+            logger.info("%s: Number of papers (filtered) with abstract: %d" % (os.path.basename(input_f), sum(1 for p in papers if legit_document(p.abstract))))
+            logger.info("%s: Number of papers (filtered) with DOI but no abstract %d" % (os.path.basename(input_f), sum(1 for p in papers if not legit_document(p.abstract) and p.doi)))
 
         papers.sort(key=lambda p: p.author_id)
-        logging.debug("Papers sorted by author id")
+        logger.debug("Papers sorted by author id")
         author_to_papers = groupby(papers, lambda p: Author(p.author_id, p.name, p.institution)._asdict())
-        logging.debug("Papers grouped by author_id")
+        logger.debug("Papers grouped by author_id")
 
         for author, papers_from_author in author_to_papers:
             self.ef.data_layer.add_papers_from_author(author, papers_from_author)
@@ -85,7 +86,7 @@ class ExpertFindingBuilder(object):
             self.ef.index_writer.optimize()
             self.ef.index_writer.close()
         except Exception:
-            logging.warn("Lucene is disabled")
+            logger.warn("Lucene is disabled")
 
 class ExpertFinding(object):
     QUERY_SCORE_THRESHOLD = 0.20
@@ -96,7 +97,7 @@ class ExpertFinding(object):
         self.rel_dict = SqliteDict(relatedness_dict_file) if relatedness_dict_file else dict()
         try:
             lucene.initVM()
-            logging.info("Lucene index directory: %s", lucene_dir)
+            logger.info("Lucene index directory: %s", lucene_dir)
             index_dir = lucene.SimpleFSDirectory(lucene.File(lucene_dir))
             self.analyzer = lucene.ClassicAnalyzer(lucene.Version.LUCENE_35)
             if erase:
@@ -104,8 +105,8 @@ class ExpertFinding(object):
             else:
                 self.index_searcher = lucene.IndexSearcher(index_dir)
         except Exception as e:
-            logging.error(e)
-            logging.warn("Lucene disabled")
+            logger.error(e)
+            logger.warn("Lucene disabled")
 
     def builder(self):
         return ExpertFindingBuilder(self)
@@ -259,15 +260,15 @@ class ExpertFinding(object):
         if len(scoring_functions) == 0:
             return {}
 
-        logging.debug(u"Processing query: {}".format(input_query))
+        logger.debug(u"Processing query: {}".format(input_query))
         start_time = time.time()
         query_entities =  list(set(a.entity_title for a in entities(input_query) if a.score >= self.QUERY_SCORE_THRESHOLD))
         if len(query_entities) == 0:
             query_entities = list(set(a.entity_title for a in entities(input_query)))
 
-        logging.debug(u"Found the following entities in the query: {}".format(u",".join(query_entities)))
+        logger.debug(u"Found the following entities in the query: {}".format(u",".join(query_entities)))
         authors = self.data_layer.citing_authors(query_entities) 
-        logging.debug(u"Found %d authors that matched the query, computing score for each of them." % len(authors))
+        logger.debug(u"Found %d authors that matched the query, computing score for each of them." % len(authors))
 
         results = {}
         for scoring_f in scoring_functions:
@@ -276,7 +277,7 @@ class ExpertFinding(object):
             results[scoring_f_name] = scoring.score(self, scoring_f, query_entities, authors)
             runtime = time.time() - start_time
             results["time_" + scoring_f_name] = runtime
-            logging.info("Query completed in %.3f sec", runtime)
+            logger.info("Query completed in %.3f sec", runtime)
 
         results["query_entities"] = list(query_entities)
         return results
@@ -285,7 +286,7 @@ class ExpertFinding(object):
         if len(scoring_functions) == 0:
             return {}
 
-        logging.debug(u"Processing Lucene query: {}".format(input_query))
+        logger.debug(u"Processing Lucene query: {}".format(input_query))
         query = lucene.QueryParser(lucene.Version.LUCENE_35, "text", self.analyzer).parse(lucene_escape(input_query))
         hits = self.index_searcher.search(query, 40)
         query_result = {}
@@ -304,10 +305,10 @@ class ExpertFinding(object):
         for scoring_f in scoring_functions:
             start_time = time.time()
             scoring_f_name = scoring_f.__name__.replace("_score", "")
-            results[scoring_f_name] = scoring_f(query_result)
+            results[scoring_f_name] = scoring.score(self, scoring_f, None, query_result)
             runtime = time.time() - start_time
             results["time_" + scoring_f_name] = runtime
-            logging.info("Query completed in %.3f sec", runtime)
+            logger.info("Query completed in %.3f sec", runtime)
 
         return results
 
@@ -315,6 +316,10 @@ class ExpertFinding(object):
     def find_expert_mix(self, input_query, scoring_functions):
         if len(scoring_functions) == 0:
             return {}
+        
+        query_entities =  list(set(a.entity_title for a in entities(input_query) if a.score >= self.QUERY_SCORE_THRESHOLD))
+        if len(query_entities) == 0:
+            query_entities = list(set(a.entity_title for a in entities(input_query)))
 
         results = {}
         for scoring_f in scoring_functions:
@@ -324,9 +329,10 @@ class ExpertFinding(object):
             scoring_f_name = scoring_f.__name__.replace("_score", "")
             lucene_scoring_f_name = scoring_f.LUCENE_SCORING_FUNCTION.__name__.replace("_score", "")
             entities_scoring_f_name = scoring_f.ENTITIES_SCORING_FUNCTION.__name__.replace("_score", "")
-            results[scoring_f_name] = scoring_f(entities_results[entities_scoring_f_name], lucene_results[lucene_scoring_f_name], input_query)
+            logger.debug(scoring_f)
+            results[scoring_f_name] = scoring_f(self, query_entities, entities_results[entities_scoring_f_name], lucene_results[lucene_scoring_f_name])
             runtime = time.time() - start_time
             results["time_" + scoring_f_name] = runtime
-            logging.info("Query completed in %.3f sec", runtime)
+            logger.info("Query completed in %.3f sec", runtime)
 
         return results

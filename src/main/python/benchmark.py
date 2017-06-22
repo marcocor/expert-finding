@@ -5,6 +5,7 @@ import signal
 import sys
 import codecs
 import logging
+logging.basicConfig(level=logging.CRITICAL)
 import time
 from argparse import ArgumentParser
 from multiprocessing import Pool
@@ -123,5 +124,5 @@ def main():
         write_results(results, scoring_foo, dataset, args.qrels)
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.DEBUG)
+    logging.getLogger("EF_log").setLevel(logging.DEBUG)
     sys.exit(main())

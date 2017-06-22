@@ -5,6 +5,7 @@ from __future__ import division
 
 from argparse import ArgumentParser
 import logging
+logging.basicConfig(level=logging.CRITICAL)
 import sys
 from expertfinding.core import ExpertFinding
 from collections import Counter
@@ -23,5 +24,5 @@ def main():
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    logging.getLogger("EF_log").setLevel(logging.DEBUG)
     sys.exit(main())
