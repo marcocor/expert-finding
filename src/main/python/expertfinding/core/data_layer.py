@@ -69,7 +69,7 @@ class DataLayer():
         """
 
         logging.info(
-            "Indexing documents from author [%s] (%s)", author_info[1], author_info[0])
+            "Indexing documents from author [%s] (%s)", author_info["name"], author_info["author_id"])
 
         author = self._get_author(author_info)
         for paper in papers:
@@ -200,12 +200,12 @@ class DataLayer():
 
     def _get_author(self, author_info):
         author = self.db_.authors.find_one(
-            {"author_id": author_info.author_id})
+            {"author_id": author_info["author_id"]})
         if author is None:
             author = {
-                "author_id": author_info.author_id,
-                "institution": author_info.institution,
-                "name": author_info.name,
+                "author_id": author_info["author_id"],
+                "institution": author_info["institution"],
+                "name": author_info["name"],
                 "entities": [],
                 "documents": []
             }
@@ -265,7 +265,7 @@ class DataLayer():
         author = self.db_.authors.find_one(
             {"author_id": author_id}, {'name': True})
         return author['name']
-        
+
     def complete_author_name(self, author_name):
         res = self.db_.authors.find({"name" : { "$regex": ".*{}.*".format(author_name), "$options": "i"} })
         return res
@@ -452,3 +452,11 @@ class DataLayer():
         """
         res = self.db_.documents.count()
         return res
+
+
+    def author_entities(self, author_id, min_rho):
+        """
+        Retrieves entities associated with author_id with rho ge than min_rho
+        """
+        author = self._get_author({"author_id": author_id})
+        return [entity["entity_name"] for entity in author["entities"] if entity["score"] >= min_rho]

@@ -31,8 +31,7 @@ def paper_generator_tu(filename, encoding=INPUT_ENCODING_TU):
         r = csv.reader(f, encoding=encoding)
         for doc_id, author_id, text in r:
             words = [word for word in text.split() if not word.isupper()]
-            text = text.translate(None, "ABCDEFGHIJKLMNOPQRSTUVWXYZ.,;")
-            yield Paper(author_id, "Name of {}".format(author_id), "TU", 2017, ' '.join(text), None)
+            yield Paper(author_id, "Name of {}".format(author_id), "TU", 2017, ' '.join(words), None)
 
 
 def paper_generator(i_file, i_format):
