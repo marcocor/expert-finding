@@ -3,9 +3,13 @@
 import os
 import signal
 import sys
+import io
+import traceback
 import codecs
 import logging
 logging.basicConfig(level=logging.CRITICAL)
+logger = logging.getLogger("EF_log")
+logger.setLevel(logging.DEBUG)
 import time
 from argparse import ArgumentParser
 from multiprocessing import Pool
@@ -32,6 +36,7 @@ SCORING_FUNCTIONS = {foo.__name__: foo
                          scoring.lucene_mean_score,
                          scoring.lucene_max_eciaf_score,
                          scoring.lucene_max_eciaf_norm_score,
+                         scoring.lucene_max_eciaf_norm_rel_score,
                          random_score,
                          ]
                     }
@@ -117,12 +122,16 @@ def main():
 
         try:
             results = dict(pool.map(ef_processor, queries))
+            dataset = os.path.split(args.qrels)[-1].replace(".qrel", "")
+            write_results(results, scoring_foo, dataset, args.qrels)
         except KeyboardInterrupt:
             pool.terminate()
             pool.join()
-        dataset = os.path.split(args.qrels)[-1].replace(".qrel", "")
-        write_results(results, scoring_foo, dataset, args.qrels)
+        except Exception as e:
+            logger.error('Uncaught exception in worker process:\n')
+            traceback.print_exc()
+            raise e
+
 
 if __name__ == "__main__":
-    logging.getLogger("EF_log").setLevel(logging.DEBUG)
     sys.exit(main())

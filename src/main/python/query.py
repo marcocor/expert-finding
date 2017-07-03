@@ -12,7 +12,7 @@ import sys
 from expertfinding.core import ExpertFinding, scoring
 import tagme
 
-SCORING_FUNCTION = scoring.lucene_max_eciaf_norm_rel_score
+SCORING_FUNCTION = scoring.lucene_max_score
 
 def main():
     '''Command line options.'''
@@ -30,8 +30,10 @@ def main():
         query = raw_input("Query:")
         res = exf.find_expert(input_query=query, scoring_functions=[SCORING_FUNCTION])
         scoring_f_name = SCORING_FUNCTION.__name__.replace("_score", "")
+        i=0
         for result in res[scoring_f_name]:
-            logger.info("{} ({}) score={:.3f}".format(result["name"], result["author_id"], result["score"]))
+            logger.info("{}) {} ({}) score={:.3f}".format(i, result["name"], result["author_id"], result["score"]))
+            i += 1
     return 0
 
 

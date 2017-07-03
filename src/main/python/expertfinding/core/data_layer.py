@@ -13,7 +13,6 @@ except ImportError:
     logger.error("Cannot import Lucene")
 
 
-
 DEFAULT_MIN_SCORE = 0.20
 
 def beautify_str(s):
@@ -174,7 +173,8 @@ class DataLayer():
                             author_occurrence['score']
                         )
                         author_occurrence['years'].append(document.year)
-                        author_occurrence['years'] = list(set(author_occurrence['years']))
+                        author_occurrence['years'] = list(
+                            set(author_occurrence['years']))
                         found = True
                         break
                 if not found:
@@ -226,7 +226,6 @@ class DataLayer():
 
         return doc_entities
 
-
     def get_document_containing_entities(self, author_id, entities):
         res = self.db_.documents.find({
             "author_id": author_id,
@@ -269,7 +268,8 @@ class DataLayer():
         return author['name']
 
     def complete_author_name(self, author_name):
-        res = self.db_.authors.find({"name" : { "$regex": ".*{}.*".format(author_name), "$options": "i"} })
+        res = self.db_.authors.find(
+            {"name": {"$regex": ".*{}.*".format(author_name), "$options": "i"}})
         return res
 
     def get_author_papers_count(self, author_id):
@@ -369,7 +369,6 @@ class DataLayer():
 
         return res
 
-
     def citing_authors(self, entities):
         """
         Returns the list of author (author_id) that cited
@@ -428,7 +427,6 @@ class DataLayer():
 
         return res
 
-
     def get_author_max_rho(self, author_id, entities):
         """
         Retrieves max rho associated to each entity for the given author
@@ -455,10 +453,14 @@ class DataLayer():
         res = self.db_.documents.count()
         return res
 
-
     def author_entities(self, author_id, min_rho):
         """
         Retrieves entities associated with author_id with rho ge than min_rho
         """
         author = self._get_author({"author_id": author_id})
-        return [entity["entity_name"] for entity in author["entities"] if entity["score"] >= min_rho]
+        return dict((
+            entity["entity_name"], {
+                "entity_name": entity["entity_name"],
+                "document_count": entity["document_count"],
+                "score": entity["score"]
+            }) for entity in author["entities"] if entity["score"] >= min_rho)
