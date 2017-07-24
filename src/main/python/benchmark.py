@@ -9,7 +9,7 @@ import codecs
 import logging
 logging.basicConfig(level=logging.CRITICAL)
 logger = logging.getLogger("EF_log")
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.INFO)
 import time
 from argparse import ArgumentParser
 from multiprocessing import Pool
@@ -41,10 +41,10 @@ SCORING_FUNCTIONS = {foo.__name__: foo
                          ]
                     }
 
-def initialize_ef_processor(storage_db, lucene_dir, database_name, scoring_f, rel_dict_file):
+def initialize_ef_processor(database_name, lucene_dir, scoring_f, rel_dict_file, wiki_api_endpoint, cache_dir):
     global exf, scoring_foo
     signal.signal(signal.SIGINT, signal.SIG_IGN)
-    exf = ExpertFinding(storage_db=storage_db, lucene_dir=lucene_dir, database_name=database_name, relatedness_dict_file=rel_dict_file)
+    exf = ExpertFinding(lucene_dir=lucene_dir, database_name=database_name, relatedness_dict_file=rel_dict_file, wiki_api_endpoint=wiki_api_endpoint, cache_dir=cache_dir)
     scoring_foo = scoring_f
 
 
@@ -99,14 +99,15 @@ def write_results(results, scoring_foo, dataset, qrels):
 
 def main():
     parser = ArgumentParser()
-    parser.add_argument("-s", "--storage_db", required=True, action="store", help="Storage DB file")
     parser.add_argument("-l", "--lucene_dir", required=False, action="store", help="Lucene index root directory")
     parser.add_argument("-d", "--database_name", required=True, action="store", help="MongoDB database name")
+    parser.add_argument("-c", "--cache_dir", required=True,action="store", help="Cache directory")
     parser.add_argument("-r", "--relatedness_dict", required=True, action="store", help="Relatedness persistent dictionary file")
     parser.add_argument("-g", "--gcube_token", required=True, action="store", help="Tagme authentication gcube token")
     parser.add_argument("-t", "--topics", required=True, action="store", help="Topic id-description mapping file")
     parser.add_argument("-q", "--qrels", required=True, action="store", help="Qrel file")
     parser.add_argument("-f", "--scoring", required=True, action="store", nargs="+", help="Name of scoring functions tu test", choices=SCORING_FUNCTIONS.keys())
+    parser.add_argument("-w", "--wiki_api_endpoint", required=True, action="store", help="Wikipedia API endpoint")
     args = parser.parse_args()
 
     tagme.GCUBE_TOKEN = args.gcube_token
@@ -116,12 +117,18 @@ def main():
     queries = list(set(sorted((topic_id, topics[topic_id]) for topic_id, _, _ in qrels_generator(args.qrels))))
 
     for scoring_foo in [SCORING_FUNCTIONS[scoring_f_name] for scoring_f_name in args.scoring]:
-        pool = Pool(initializer=initialize_ef_processor, initargs=(args.storage_db, args.lucene_dir, args.database_name, scoring_foo, args.relatedness_dict))
-        # initialize_ef_processor(args.storage_db, args.lucene_dir, args.database_name, scoring_foo, args.relatedness_dict)
+        pool = Pool(initializer=initialize_ef_processor, initargs=(args.database_name, args.lucene_dir, scoring_foo, args.relatedness_dict, args.wiki_api_endpoint, args.cache_dir))
+        # initialize_ef_processor(args.database_name, args.lucene_dir, scoring_foo, args.relatedness_dict, args.wiki_api_endpoint, args.cache_dir)
         # results = dict(ef_processor(query) for query in queries)
 
         try:
-            results = dict(pool.map(ef_processor, queries))
+            results = []
+            for i, query_result in enumerate(pool.imap_unordered(ef_processor, queries)):
+                results.append(query_result)
+                logger.info("\r=====PROGRESS=====: %d/%d", i, len(queries))
+
+            # results = dict(pool.map(ef_processor, queries))
+            results = dict(results)
             dataset = os.path.split(args.qrels)[-1].replace(".qrel", "")
             write_results(results, scoring_foo, dataset, args.qrels)
         except KeyboardInterrupt:

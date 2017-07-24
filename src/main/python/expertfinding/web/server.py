@@ -17,7 +17,9 @@ import tagme
 
 from expertfinding.core import ExpertFinding, scoring
 
-app = Flask(__name__, static_folder=os.path.join("..", "..", "..", "resources", "web"), static_path="/static")
+app = Flask(__name__, static_folder=os.path.join(
+    "..", "..", "..", "resources", "web"), static_path="/static")
+
 
 @app.route('/')
 def index():
@@ -30,6 +32,7 @@ def get_document():
     docid = str(request.args.get('d'))
     doc = exf.data_layer.get_document(docid)
     return jsonify(author_id=doc["author_id"], ret_doc_id=str(doc["_id"]), year=doc["year"], body=doc["text"])
+
 
 @app.route('/documents')
 def get_documents():
@@ -44,29 +47,34 @@ def get_documents():
     for doc in docs:
         document_id = str(doc['_id'])
         docid_to_year[document_id] = doc['year']
-        docid_to_entities[document_id] = [{"entity": entity['entity'], "count": entity['count']} for entity in doc['entities']]
+        docid_to_entities[document_id] = [
+            {"entity": entity['entity_name'], "count": entity['count']} for entity in doc['entities']]
 
     return jsonify({
         "entity_to_max_rho": entity_to_max_rho,
         "docid_to_entities": dict((docid, {
             "year": docid_to_year[docid],
             "entities": docid_to_entities[docid]
-            }) for docid in docid_to_year)
+        }) for docid in docid_to_year)
     })
+
 
 @app.route('/query')
 def find_expert():
     global exf
     input_query = request.args.get('q')
-    results = exf.find_expert(input_query=input_query, scoring_functions=scoring.ENTITIES_SCORING_FUNCTIONS)
+    results = exf.find_expert(
+        input_query=input_query, scoring_functions=scoring.ENTITIES_SCORING_FUNCTIONS)
 
     return jsonify(results)
+
 
 @app.route('/querylucene')
 def find_expert_lucene():
     global exf
     input_query = request.args.get('q')
-    results = exf.find_expert(input_query=input_query, scoring_functions=scoring.LUCENE_SCORING_FUNCTIONS)
+    results = exf.find_expert(
+        input_query=input_query, scoring_functions=scoring.LUCENE_SCORING_FUNCTIONS)
 
     return jsonify(results)
 
@@ -78,8 +86,9 @@ def complete_name():
     return jsonify(authors=[{"id": author["author_id"],
                              "name": author["name"],
                              "institution": author["institution"],
-                            }
+                             }
                             for author in exf.authors_completion(query)])
+
 
 @app.route('/author')
 def author_info():
@@ -103,22 +112,32 @@ def author_info():
         entities=entity_freq,
     )
 
+
 def main():
     global exf
     '''Command line options.'''
     parser = ArgumentParser()
-    parser.add_argument("-s", "--storage_db", required=True, action="store", help="Storage DB file")
-    parser.add_argument("-d", "--database_name", required=True, action="store", help="MongoDB database name")
-    parser.add_argument("-r", "--relatedness_dict", required=True, action="store", help="Relatedness persistent dictionary file")
-    parser.add_argument("-l", "--lucene_dir", required=True, action="store", help="Lucene index root directory")
-    parser.add_argument("-g", "--gcube_token", required=True, action="store", help="Tagme authentication gcube token")
+    parser.add_argument("-d", "--database_name", required=True,
+                        action="store", help="MongoDB database name")
+    parser.add_argument("-r", "--relatedness_dict", required=True,
+                        action="store", help="Relatedness persistent dictionary file")
+    parser.add_argument("-l", "--lucene_dir", required=True,
+                        action="store", help="Lucene index root directory")
+    parser.add_argument("-w", "--wiki_api_endpoint", required=True,
+                        action="store", help="Wikipedia API endpoint")
+    parser.add_argument("-g", "--gcube_token", required=True,
+                        action="store", help="Tagme authentication gcube token")
+    parser.add_argument("-c", "--cache_dir", required=True,
+                        action="store", help="Cache directory")
     args = parser.parse_args()
 
     tagme.GCUBE_TOKEN = args.gcube_token
-
-    exf = ExpertFinding(storage_db=args.storage_db, database_name=args.database_name, lucene_dir=args.lucene_dir, relatedness_dict_file=args.relatedness_dict)
+    exf = ExpertFinding(database_name=args.database_name,
+                        lucene_dir=args.lucene_dir,
+                        wiki_api_endpoint=args.wiki_api_endpoint,
+                        cache_dir=args.cache_dir)
     return app.run(host="0.0.0.0")
-    
+
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)

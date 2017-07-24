@@ -5,3 +5,9 @@ lxml
 langdetect
 unicodecsv
 flask
+pymongo
+astroid
+numpy
+scipy
+multiprocess
+requests
