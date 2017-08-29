@@ -7,4 +7,5 @@ python $ROOT_DIR/../src/main/python/query.py \
 	-g $TAGME_API_KEY \
 	-c $CACHE_DIR \
 	-l $LUCENE_INDEX_DIR \
-	-w $WIKI_API_ENDPOINT
+	-w $WIKI_API_ENDPOINT \
+	-f '[{"name": "eciaf_score", "weight": 3}, {"name": "eciaf_score", "weight": 1, "query_expansion": 20}, {"name": "lucene_max_score", "weight": 3}]'

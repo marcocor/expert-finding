@@ -7,15 +7,15 @@ import time
 API_ENDPOINT=None
 _request_sleep_time=0.05
 
-def set_cache(cache):
-    expertfinding.core.wiki_util.rank_single = cache(_rank_single)
-    expertfinding.core.wiki_util.text = cache(_text)
-    expertfinding.core.wiki_util.rel = cache(_rel)
+def set_cache(expcache):
+    expertfinding.core.wiki_util.rank_single = expcache.cache(_rank_single)
+    expertfinding.core.wiki_util.text = expcache.cache(_text)
+    expertfinding.core.wiki_util.rel = expcache.cache(_rel)
 
-def rank(srcWikiIDs, method="jaccard"):
+def rank(srcWikiIDs, method="jaccard", query_expansion=0):
     entities_list = []
     for srcWikiID in srcWikiIDs:
-        entities_list += rank_single(srcWikiID, method)
+        entities_list += rank_single(srcWikiID, method)[:query_expansion]
     return entities_list
 
 def _rank_single(srcWikiID, method):

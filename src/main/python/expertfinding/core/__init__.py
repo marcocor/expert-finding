@@ -10,6 +10,7 @@ import tagme
 import time
 
 import expertfinding.wiki_util as wiki_util
+from expertfinding.cache_fs import Cache
 
 from collections import Counter, namedtuple
 from itertools import groupby
@@ -41,10 +42,10 @@ def entities(text):
         return []
 
 
-def set_cache(cache_dir):
-    cache = pyfscache.FSCache(cache_dir)
-    expertfinding.core.entities = cache(expertfinding.core.entities)
-    expertfinding.wiki_util.set_cache(cache)
+def set_cache(expcache):
+    # cache = pyfscache.FSCache(cache_dir)
+    expertfinding.core.entities = expcache.cache(expertfinding.core.entities)
+    expertfinding.wiki_util.set_cache(expcache)
 
 
 def weighted_geom_mean(vals_weights):
@@ -113,27 +114,14 @@ class ExpertFinding(object):
             logger.warn("Lucene disabled")
 
         if cache_dir:
-            set_cache(cache_dir)
+            self.cache = Cache(cache_dir, readonly=True)
+            set_cache(self.cache)
+    
+    def close(self):
+        self.cache.close()
 
     def builder(self):
         return ExpertFindingBuilder(self)
-
-    # def author_entity_frequency_and_popularity(self, author_id):
-    #     """
-    #     Returns how many authors's papers have cited the entities cited by a specific author.
-    #     """
-    #     return self.db.execute(u'''
-    #         SELECT e.entity, author_freq, SUM(e.frequency) AS entity_popularity,  years, max_rho
-    #         FROM entities AS e,
-    #         (
-    #             SELECT entity, COUNT(DISTINCT(document_id)) as author_freq, GROUP_CONCAT(year) as years, MAX(rho) AS max_rho
-    #             FROM entity_occurrences
-    #             WHERE author_id == ? AND rho > ?
-    #             GROUP BY entity
-    #         ) as d_e
-    #         WHERE d_e.entity == e.entity GROUP BY e.entity
-    #         ''', (author_id, DEFAULT_MIN_SCORE)).fetchall()
-
 
     def ef_iaf_author(self, author_id):
         """
@@ -153,6 +141,7 @@ class ExpertFinding(object):
 
     def ef_iaf_entities(self, entities):
         total_papers = self.data_layer.total_papers()
+        total_authors = self.data_layer.total_authors()
         entity_popularities = self.data_layer.entity_popularity([entity_id for _, entity_id in entities])
 
         ef_iaf_dict = dict()
@@ -160,7 +149,7 @@ class ExpertFinding(object):
             entity_id = entity["entity_id"]
             entity_name = entity['entity_name']
             entity_popularity = entity['entity_popularity']
-            ef_iaf_dict[entity_id] = 1.0/len(entities) * log(total_papers/float(entity_popularity))
+            ef_iaf_dict[entity_id] = 1.0/len(entities) * log(total_authors/float(entity_popularity))
 
         return ef_iaf_dict
 
@@ -174,46 +163,27 @@ class ExpertFinding(object):
 
         for author in res:
             author_id = author['_id']
-            author_to_entities_count[author_id] = dict((entity['entity_id'], entity['document_count']) for entity in author['entities'])
+            author_to_entities_count[author_id] = dict((entity['entity_id'], entity["score"] * entity["pr_score"] * entity['document_count']) for entity in author['entities'])
+            # author_to_entities_count[author_id] = dict((entity['entity_id'], entity["score"] * entity['document_count']) for entity in author['entities'])
 
         return author_to_entities_count
 
-    # def institution_papers_count(self, institution):
-    #     return self.db.execute(u'''
-    #         SELECT document_count
-    #         FROM "institutions"
-    #         WHERE institution=?''', (institution,)).fetchall()[0][0]
+    def print_documents_quantiles(self):
+        papers_count = self.data_layer.total_papers()
+        authors_count = self.data_layer.total_authors()
+        print "number of documents: {}".format(papers_count)
+        print "number of authors: {}".format(authors_count)
+        
+        for author_id in self.data_layer.all_authors():
+            author_entities = self.data_layer.author_entities(author_id, self.QUERY_SCORE_THRESHOLD)
+            print len(author_entities)
 
-    # def author_id(self, author_name):
-    #     return [r[0] for r in self.db.execute(u'''SELECT author_id FROM authors WHERE name=?''', (author_name,)).fetchall()]
-
-    # def institution(self, author_id):
-    #     return self.db.execute(u'''SELECT institution FROM authors WHERE author_id=?''', (author_id,)).fetchall()[0][0]
-
-    # def grouped_entities(self, author_id, year=None, min_freq=None):
-    #     contraints = []
-    #     if year is not None:
-    #         contraints.append('year=%d' % year)
-    #     if min_freq is not None:
-    #         contraints.append('COUNT(*)>=%d' % min_freq)
-    #     having = "HAVING {}".format(" AND ".join(contraints)) if contraints else ""
-    #     return self.db.execute(u'''SELECT entity, year, AVG(rho), MIN(rho), MAX(rho), GROUP_CONCAT(rho), COUNT(*)
-    #        FROM entity_occurrences
-    #        WHERE author_id=?
-    #        GROUP BY entity, year
-    #        {}
-    #        ORDER BY year, COUNT(*) DESC'''.format(having), author_id).fetchall()
-
-    # def print_documents_quantiles(self):
-    #     papers_count = zip(*self.data_layer.total_papers())[1]
-    #     print "number of documents: {}".format(sum(papers_count))
-    #     print "number of authors: {}".format(len(papers_count))
-    #     quantiles = stats.mstats.mquantiles(papers_count, prob=[n / 10.0 for n in range(10)])
-    #     print "quantiles:", quantiles
-    #     for i in range(len(quantiles)):
-    #         begin = int(quantiles[i])
-    #         end = int(quantiles[i + 1]) - 1 if i < len(quantiles) - 1 else max(papers_count)
-    #         print "{} authors have {}-{} documents with abstract".format(sum(1 for c in papers_count if begin <= c <= end), begin, end)
+        # quantiles = stats.mstats.mquantiles(papers_count, prob=[n / 10.0 for n in range(10)])
+        # print "quantiles:", quantiles
+        # for i in range(len(quantiles)):
+        #     begin = int(quantiles[i])
+        #     end = int(quantiles[i + 1]) - 1 if i < len(quantiles) - 1 else max(papers_count)
+        #     print "{} authors have {}-{} documents with abstract".format(sum(1 for c in papers_count if begin <= c <= end), begin, end)
 
 
     def authors_completion(self, author_name):
@@ -249,17 +219,7 @@ class ExpertFinding(object):
 
         return mean([clip(1 - weighted_geom_mean(relatedness_weights[q_entity]) + alpha, 0.0, 1.0) ** (1.0/x) for q_entity in relatedness_weights])
 
-    def find_expert(self, input_query, scoring_functions=[]):
-        entities_scoring_f = [scoring_f for scoring_f in scoring_functions if scoring_f in scoring.ENTITIES_SCORING_FUNCTIONS]
-        lucene_scoring_f = [scoring_f for scoring_f in scoring_functions if scoring_f in scoring.LUCENE_SCORING_FUNCTIONS]
-        mix_scoring_f = [scoring_f for scoring_f in scoring_functions if scoring_f in scoring.MIX_SCORING_FUNCTIONS]
-        entities_results = self.find_expert_entities(input_query, entities_scoring_f)
-        lucene_results = self.find_expert_lucene(input_query, lucene_scoring_f)
-        mix_results = self.find_expert_mix(input_query, mix_scoring_f)
-        return dict(entities_results.items() + lucene_results.items() + mix_results.items())
-
-
-    def get_query_entities(self, input_query, query_expansion=False):
+    def get_query_entities(self, input_query, query_expansion=0):
         """
 
         """
@@ -269,44 +229,28 @@ class ExpertFinding(object):
 
 
         if query_expansion:
-            topk1 = 10
-            topk2 = 100
+            topk1 = 50
+            topk2 = 20
             # query_expansion = dict((e["dstWikiID"], (e["dstWikiTitle"], e["dstWikiID"])) for e in wiki_util.text(input_query)[:topk1])
             # query_expansion2 = dict((e["dstWikiID"], (e["dstWikiTitle"], e["dstWikiID"])) for e in wiki_util.rank(query_entities, "milnewitten"))
-            query_expansion3 = dict((e["dstWikiID"], (e["dstWikiTitle"], e["dstWikiID"])) for e in wiki_util.rank(query_entities, "jaccard"))
+            query_expansion3 = dict((e["dstWikiID"], (e["dstWikiTitle"], e["dstWikiID"])) for e in wiki_util.rank(query_entities, "jaccard", query_expansion))
             # query_entities.update(query_expansion)
             # query_entities.update(query_expansion2)
             query_entities.update(query_expansion3)
 
         return query_entities.values()
 
-    def find_expert_entities(self, input_query, scoring_functions):
-        if len(scoring_functions) == 0:
-            return {}
+    def find_expert_entities(self, input_query, scoring_function, query_expansion=0):
+        logger.info(u"Processing Entities query: {}".format(input_query))
 
-        logger.info(u"Processing query: {}".format(input_query))
-
-        query_entities = self.get_query_entities(input_query, query_expansion=True)
+        query_entities = self.get_query_entities(input_query, query_expansion=query_expansion)
         # logger.debug(u"Found the following entities in the query: {}".format(u",".join([entity_title for entity_title, _ in query_entities])))
         authors = self.data_layer.citing_authors([entity_id for _, entity_id in query_entities])
-        logger.info(u"Found %d authors that matched the query, computing score for each of them." % len(authors))
+        logger.info(u"Found %d authors that matched query entities, computing score for each of them." % len(authors))
 
-        results = {}
-        for scoring_f in scoring_functions:
-            start_time = time.time()
-            scoring_f_name = scoring_f.__name__.replace("_score", "")
-            results[scoring_f_name] = scoring.score(self, scoring_f, query_entities, authors)
-            runtime = time.time() - start_time
-            results["time_" + scoring_f_name] = runtime
-            logger.info("Query completed in %.3f sec", runtime)
+        return scoring.score_entities(self, scoring_function, query_entities, authors)
 
-        results["query_entities"] = [entity_title for entity_title, _ in query_entities]
-        return results
-
-    def find_expert_lucene(self, input_query, scoring_functions):
-        if len(scoring_functions) == 0:
-            return {}
-
+    def find_expert_lucene(self, input_query, scoring_function):
         logger.debug(u"Processing Lucene query: {}".format(input_query))
         query = lucene.QueryParser(lucene.Version.LUCENE_35, "text", self.analyzer).parse(lucene_escape(input_query))
         hits = self.index_searcher.search(query, 40)
@@ -322,56 +266,44 @@ class ExpertFinding(object):
             author_score['scores'][document_id] = doc_score
             query_result[author_id] = author_score
 
-        results = {}
-        for scoring_f in scoring_functions:
-            start_time = time.time()
-            scoring_f_name = scoring_f.__name__.replace("_score", "")
-            results[scoring_f_name] = scoring.score(self, scoring_f, None, query_result)
-            runtime = time.time() - start_time
-            results["time_" + scoring_f_name] = runtime
-            logger.info("Query completed in %.3f sec", runtime)
+        return scoring.score_lucene(self, scoring_function, query_result)
 
-        return results
+    def find_expert_mix(self, input_query, authors_id, scoring_function):
+        logger.info(u"Processing mix query: {}".format(input_query))
+        return scoring.score_mix(self, scoring_function, input_query, authors_id)
 
 
-    def find_expert_mix(self, input_query, scoring_functions):
-        if len(scoring_functions) == 0:
-            return {}
+    def find_expert(self, input_query, scoring_structure):
+        scores = []
 
-        query_entities = self.get_query_entities(input_query=input_query, query_expansion=False)
+        query_entities = [entity_name for entity_name, entity_id in self.get_query_entities(input_query)]
+        start_time = time.time()
 
-        # query_entities =  list(set((a.entity_title, a.entity_id) for a in entities(input_query) if a.score >= self.QUERY_SCORE_THRESHOLD))
-        # if len(query_entities) == 0:
-        #     query_entities = list(set((a.entity_title, a.entity_id) for a in entities(input_query)))
+        entities_scoring_functions = scoring_structure.entities_scoring
+        for (entities_scoring_f, weight, query_expansion) in entities_scoring_functions:
+            scores.append((self.find_expert_entities(input_query, entities_scoring_f, query_expansion), weight))
 
-        # query_entities = dict()
-        # for e in entities(input_query):
-        #     last_score = query_entities.get(e.entity_id, 0)
-        #     if e.score >= self.QUERY_SCORE_THRESHOLD:
-        #         query_entities[e.entity_id] = {
-        #             "entity_id": e.entity_id,
-        #             "entity_name": e.entity_title,
-        #             "score": max(last_score, e.score)
-        #         }
-                    
-        results = {}
-        for scoring_f in scoring_functions:
-            start_time = time.time()
-            scoring_f_name = scoring_f.__name__.replace("_score", "")
-            lucene_scoring_f_name = scoring_f.LUCENE_SCORING_FUNCTION.__name__.replace("_score", "")
-            entities_scoring_f_name = scoring_f.ENTITIES_SCORING_FUNCTION.__name__.replace("_score", "")
-
-            # Computing results wrt Lucene
-            lucene_results = self.find_expert_lucene(input_query, [scoring_f.LUCENE_SCORING_FUNCTION])
-            # Considering only queries with entities with score higher than QUERY_SCORE_THRESHOLD
-            if query_entities:
-                entities_results = self.find_expert_entities(input_query, [scoring_f.ENTITIES_SCORING_FUNCTION])
-                results[scoring_f_name] = scoring_f(self, query_entities, entities_results[entities_scoring_f_name], lucene_results[lucene_scoring_f_name])
-            else:
-                results[scoring_f_name] = lucene_results[lucene_scoring_f_name]
-            runtime = time.time() - start_time
-            results["time_" + scoring_f_name] = runtime
-            logger.info("Query completed in %.3f sec", runtime)
+        lucene_scoring_functions = scoring_structure.lucene_scoring
+        for (lucene_scoring_f, weight) in lucene_scoring_functions:
+            scores.append((self.find_expert_lucene(input_query, lucene_scoring_f), weight))
         
-        results["query_entities"] = [entity_name for entity_name, entity_id in query_entities]
-        return results
+        authors_id = list(set([hit["author_id"] for partial_result, _ in scores for hit in partial_result]))
+        mix_scoring_functions = scoring_structure.mix_scoring
+        for (mix_scoring_f, weight) in mix_scoring_functions:
+            scores.append((self.find_expert_mix(input_query, authors_id, mix_scoring_f), weight))
+
+        results = scoring.normalize_merge(scores)
+        runtime = time.time() - start_time
+        logger.info("Query completed in %.3f sec", runtime)
+        return results ,runtime, query_entities
+
+
+    def find_expert_(self, input_query):
+        scores = []
+        scores.append(self.find_expert_entities(input_query, scoring.eciaf_score))
+        scores.append(self.find_expert_entities(input_query, scoring.eciaf_score, 20))
+        scores.append(self.find_expert_lucene(input_query, scoring.lucene_max_score))
+        authors_id = list(set([hit["author_id"] for partial_result in scores for hit in partial_result]))
+        scores.append(self.find_expert_mix(input_query, authors_id, scoring.author_entities_relatedness_score))
+        
+        return scores

@@ -152,7 +152,7 @@ class DataLayer():
                     'documents': [document_id]
                 }
             else:
-                # otherwise need to add the institution of current author, the considered document 
+                # otherwise need to add the institution of current author, the considered document
                 # and check if the author has already cited this entity before
                 entity['institutions'].append(document.institution)
                 entity['institutions'] = list(set(entity['institutions']))
@@ -329,18 +329,10 @@ class DataLayer():
         }, {
             '$project': {
                 'author_id': 1,
-                'entities': {
-                    '$filter': {
-                        'input': '$entities',
-                        'as': 'entity',
-                        'cond': {
-                            '$gte': ['$$entity.score', DEFAULT_MIN_SCORE]
-                        }
-                    }
-                }
+                'pr_entities': 1
             }
         }, {
-            '$unwind': '$entities'
+            '$unwind': '$pr_entities'
         }, {
             '$group': {
                 '_id': '$author_id',
@@ -351,7 +343,7 @@ class DataLayer():
                     '$max': '$entities.score'
                 },
                 'entities': {
-                    '$push': '$entities'
+                    '$push': '$pr_entities'
                 }
             }
         }])
@@ -363,37 +355,40 @@ class DataLayer():
         Returns the list of author (author_id) that cited
         at least one of the entities considered (with rho >= some threshold)
         """
-        res = self.db_.entities.aggregate([{
-            '$match': {
-                'entity_id': {
-                    '$in': entities
-                }
-            }
-        }, {
-            '$project': {
-                'occurrences': {
-                    '$filter': {
-                        'input': '$occurrences',
-                        'as': 'occurrence',
-                        'cond': {
-                            '$gte': ['$$occurrence.score', DEFAULT_MIN_SCORE]
-                        }
+        res = self.db_.authors.find({
+            "pr_entities": {
+                "$elemMatch": {
+                    "entity_id": {
+                        "$in": entities
                     }
                 }
             }
-        }, {
-            '$unwind': '$occurrences'
-        }, {
-            '$group': {
-                '_id': '$occurrences.author_id'
-            }
-        }, {
-            '$project': {
-                '_id': 1
-            }
-        }])
+        })
 
-        return list([citing_author['_id'] for citing_author in res])
+        # res = self.db_.authors.find({
+        #     "entities": {
+        #         "$elemMatch": {
+        #             "entity_id": {
+        #                 "$in": entities
+        #             },
+        #             "score": {
+        #                 "$gte": DEFAULT_MIN_SCORE
+        #             }
+        #         }
+        #     }
+        # })
+        return list([citing_author['author_id'] for citing_author in res])
+
+
+    def all_authors(self):
+        """
+        Returns the entire list of authors
+        """
+
+        res = self.db_.authors.find({}, {
+            "author_id": True
+        })
+        return [author["author_id"] for author in list(res)]
 
     def entity_popularity(self, entities):
         """
@@ -410,7 +405,7 @@ class DataLayer():
                 'entity_name': 1,
                 'entity_id': 1,
                 'entity_popularity': {
-                    '$size': '$documents'
+                    '$size': '$occurrences'
                 }
             }
         }])
@@ -419,7 +414,7 @@ class DataLayer():
 
     def get_author_max_rho(self, author_id, entities):
         """
-        Retrieves max rho associated to each entity for the given author, 
+        Retrieves max rho associated to each entity for the given author,
         entities are specified by wiki title
         """
         entity_to_max_rho = {}
@@ -463,7 +458,6 @@ class DataLayer():
                 "document_count": entity["document_count"],
                 "score": entity["score"]
             }) for entity in author["entities"] if entity["score"] >= min_rho)
-
 
     def _add_lucene_document(self, doc_id, document):
         try:

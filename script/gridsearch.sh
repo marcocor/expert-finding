@@ -2,7 +2,7 @@ ROOT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 export PYTHONPATH=$ROOT_DIR/../src/main/python
 source $ROOT_DIR/../expert-finding.conf
 
-python $ROOT_DIR/../src/main/python/benchmark.py \
+python $ROOT_DIR/../src/main/python/gridsearch.py \
 	-d $DATABASE_NAME \
 	-c $CACHE_DIR \
 	-l $LUCENE_INDEX_DIR \
@@ -11,8 +11,4 @@ python $ROOT_DIR/../src/main/python/benchmark.py \
 	-g $TAGME_API_KEY \
     -t $ROOT_DIR/../datasets/tu-expert-collection-translated/tu-translated-queries.tsv \
 	-q $ROOT_DIR/../corrected_GT5_judged_system_generated_graded.qrel \
-	-f '[{"name": "eciaf_score", "weight": 15},
-		{"name": "eciaf_score", "weight": 9, "query_expansion": 20}, 
-		{"name": "lucene_max_score", "weight": 24},
-		{"name": "author_entities_relatedness_score", "weight": 2}]' \
 	$@

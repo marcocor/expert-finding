@@ -7,6 +7,7 @@ python $ROOT_DIR/../src/main/python/expertfinding/preprocessing/create_db.py \
 	-f $DATASET_TYPE \
 	-s $STORAGE_DIR \
 	-d $DATABASE_NAME \
+	-w $WIKI_API_ENDPOINT \
 	-c $CACHE_DIR \
 	-l $LUCENE_INDEX_DIR \
 	-g $TAGME_API_KEY
